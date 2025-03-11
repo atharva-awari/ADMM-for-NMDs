@@ -1,4 +1,4 @@
-function [X, rho, maxiter, maxtime, W, H, lambda, Theta, A] = get_initial_matrices()
+function [X, rho, maxiter, maxtime, W, H, lambda, Theta, A] = get_initial_matrices(model_choice)
     % Ask user for matrix dimensions
     rows = input('Enter the number of rows for matrix X: ');
     cols = input('Enter the number of columns for matrix X: ');
@@ -9,10 +9,20 @@ function [X, rho, maxiter, maxtime, W, H, lambda, Theta, A] = get_initial_matric
     % Generate a random input matrix X
     W0 = randn(rows,rank);
     H0 = randn(rank,cols);
-    X = max(0,W0*H0);
-    %X = (W0*H0).^2;
-    %X = min(1, max(-1, W0*H0));
-    %X = abs(W0*H0);
+    
+    switch model_choice
+        case 1 
+         X = max(0,W0*H0);
+    
+        case 2
+         X = (W0*H0).^2;
+    
+        case 3
+         X = min(1, max(-1, W0*H0));
+        
+        case 4
+         X = abs(W0*H0);
+    end
 
     % Get penalty parameter
     rho = input('Enter the penalty parameter rho: ');
@@ -25,7 +35,8 @@ function [X, rho, maxiter, maxtime, W, H, lambda, Theta, A] = get_initial_matric
 
     
 
-    % Generate random initial matrices Theta, W,  H
+    % Generate initial matrices Theta, W,  H using SVD of X for
+    % initialization
    
     [U,S,V] = svds(X,rank);
     Theta = U*S*V';

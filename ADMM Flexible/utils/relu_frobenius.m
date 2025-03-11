@@ -1,6 +1,6 @@
 function [Theta, W, H, residual, obj,savetime]= relu_frobenius()
 
-[X, rho, maxiter, maxtime, W, H, lambda, Theta , A] = get_initial_matrices();
+[X, rho, maxiter, maxtime, W, H, lambda, Theta , A] = get_initial_matrices(1);
 
 
 cpu0=tic;
@@ -62,7 +62,7 @@ savetime(k)=runtime;
 
 end
 
-
+ 
 
 %Plotting objective and residual
 
@@ -78,5 +78,13 @@ semilogy(residual,'r','LineWidth',1.5);hold on;
 
 ylabel('Residual');
 xlabel('Iteration'); 
+
+% Save them individually in the base workspace
+    assignin('base', 'X', X);
+    assignin('base', 'W', W);
+    assignin('base', 'H', H);
+    assignin('base', 'Theta', Theta);
+    assignin('base', 'obj', obj);
+    assignin('base', 'residual', residual);
 
 end

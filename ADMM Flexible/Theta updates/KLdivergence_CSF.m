@@ -27,9 +27,9 @@ A = W*H;
 
 %for k=1:100
 
-
-t1 = (rho*A - lambda + sqrt((lambda - rho*A).^2 + 8*X.*(rho+2))) ./ 2*(rho+2);
-t2 = (rho*A - lambda - sqrt((lambda - rho*A).^2 + 8*X.*(rho+2))) ./ 2*(rho+2);
+D = sqrt((lambda - rho.*A).^2 + 8*X.*(rho+2));
+t1 = (rho.*A - lambda + D ) ./ 2*(rho+2);
+t2 = (rho.*A - lambda - D) ./ 2*(rho+2);
 
 g1 = t1.^2 - X.* log(t1.^2) + t1.*lambda + rho/2 .* (t1-A).^2;
 g2 = t2.^2 - X.* log(t2.^2) + t2.*lambda + rho/2 .* (t2-A).^2;
@@ -55,7 +55,7 @@ Theta(q) = (rho.*A(q) - lambda(q)) ./ (rho+2);
 
     for i = 1 : m
         for j = 1 : n
-            thetaijint = [Theta(i,j)-10:0.01:Theta(i,j)+10]; 
+            thetaijint = [Theta(i,j)-50:0.01:Theta(i,j)+50]; 
             for k = 1 : length(thetaijint)
                 fthetaijint(k) = thetaijint(k).^2 - X(i,j).* log(thetaijint(k).^2) + thetaijint(k).*lambda(i,j) + rho/2 .* (thetaijint(k) - A(i,j)).^2;
             end

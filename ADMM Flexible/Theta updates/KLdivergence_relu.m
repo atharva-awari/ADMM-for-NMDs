@@ -59,7 +59,7 @@ Theta(q3) = 0;
 
      for i = 1 : m
         for j = 1 : n
-            thetaijint = [Theta(i,j)-10:0.01:Theta(i,j)+10]; 
+            thetaijint = [Theta(i,j)-50:0.01:Theta(i,j)+50]; 
             for k = 1 : length(thetaijint)
                 fthetaijint(k) = max(0,thetaijint(k)) - X(i,j).* log(max(0,thetaijint(k))) + thetaijint(k).*lambda(i,j) + rho/2 .* (thetaijint(k) - A(i,j)).^2;
             end

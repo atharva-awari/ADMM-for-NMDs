@@ -1,6 +1,6 @@
 function [Theta, W, H, residual, obj,savetime]= minmax_L1()
 
-[X, rho, maxiter, maxtime, W, H, lambda, Theta , A] = get_initial_matrices();
+[X, rho, maxiter, maxtime, W, H, lambda, Theta , A] = get_initial_matrices(3);
 
 
 cpu0=tic;
@@ -122,4 +122,19 @@ semilogy(residual,'r','LineWidth',1.5);hold on;
 
 ylabel('Residual');
 xlabel('Iteration'); 
+
+% Save them individually in the base workspace
+    assignin('base', 'X', X);
+    assignin('base', 'W', W);
+    assignin('base', 'H', H);
+    assignin('base', 'Theta', Theta);
+    assignin('base', 'obj', obj);
+    assignin('base', 'residual', residual);
+
+
+
+
+
+
+
 end

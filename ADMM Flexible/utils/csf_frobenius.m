@@ -1,6 +1,6 @@
 function [Theta, W, H, residual, obj,savetime]= csf_frobenius()
 
-[X, rho, maxiter, maxtime, W, H, lambda, Theta , A] = get_initial_matrices();
+[X, rho, maxiter, maxtime, W, H, lambda, Theta , A] = get_initial_matrices(2);
 
 
 cpu0=tic;
@@ -65,6 +65,13 @@ xlabel('Iteration');
 
 
 
+% Save them individually in the base workspace
+    assignin('base', 'X', X);
+    assignin('base', 'W', W);
+    assignin('base', 'H', H);
+    assignin('base', 'Theta', Theta);
+    assignin('base', 'obj', obj);
+    assignin('base', 'residual', residual);
 
 
 
