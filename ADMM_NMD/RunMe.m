@@ -1,16 +1,18 @@
-clear all; clc;
+close all; clear all; clc;
 
 %Model = ReLU / CSF / MinMax / Modulus
 %error_measure = Frobenius, L1, KL divergence
 model = 'MinMax';
-error_measure = 'Frobenius';
+error_measure = 'KL divergence';
 
-m =20;
-n=10;
-r=5;
+%rng(2025)
+
+m =242;
+n=22;
+r=10;
 
 %Select interval if you're using MinMax model [a,b]
-options.a = -1;
+options.a = eps;
 options.b = 1;
 
 
@@ -19,33 +21,43 @@ H0 = randn(r,n);
 switch model
     case 'ReLU'
         X = max(0,W0*H0);
-
+        %load CBCL.mat;
     case 'CSF'
         X = (W0*H0).^2;
 
     case 'MinMax'
-        X = min(options.b, max(options.a, W0*H0));
+        %X = min(options.b, max(options.a, W0*H0));
+        load heart.mat;
 
     case 'Modulus'
         X = abs(W0*H0);
 end
 
 
-%Initialising Theta and W,H using SVD(X)
-[U,S,V] = svds(X,r);
-Theta = U*S*V';
+% Initialising Theta and W,H using SVD(X)
+ % [U,S,V] = svds(X,r);
+ % Theta = U*S*V';
+ % W = -U;
+ % H = -S*V';
+ %Theta = zeros(m,n);
 
-W = U;
-H = S*V';
+W = randn(m,r);
+H = randn(r,n);
+
+
+Theta = randn(m,n);
+f = find(X>0);
+Theta(f) = max(eps,Theta(f));
+X(X==0)=eps;
 
 
 %Parameters input
-rho = 5;
-maxiter = 10000;
-maxtime = 5;
+rho = 0.5;
+maxiter = inf;
+maxtime = 15;
 
 %Lagrange Multiplier
-lambda = zeros(m,n);
+lambda = randn(m,n);
 
 
 [Theta, W, H, residual, objective] = admm_nmd(X, rho, maxiter, maxtime, W, H, Theta, lambda, model, error_measure, options);

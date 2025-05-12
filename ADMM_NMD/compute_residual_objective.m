@@ -36,7 +36,7 @@ switch model
    
 
 
-              Theta = max(eps,Theta);
+              % Theta = max(eps,Theta);
               X(X == 0) = eps;
               X_approx(X_approx == 0) = eps;
 
@@ -89,7 +89,7 @@ switch model
     
 
 
-              Theta = max(eps,Theta);
+              %Theta = max(eps,Theta);
               X(X == 0) = eps;
               X_approx(X_approx == 0) = eps;
 
@@ -131,23 +131,23 @@ switch model
     
     
                % Get the size of X
-                [m, n] = size(X);
+                %[m, n] = size(X);
     
                 % Construct the estimation matrix X_est
-                em = ones(m,1); % Column vector of ones
-                en = ones(n,1); % Row vector of ones
-                X_est = mu_X * (em * en');
+                %em = ones(m,1); % Column vector of ones
+                %en = ones(n,1); % Row vector of ones
+                %X_est = mu_X * (em * en');
     
 
 
 
-               Theta = max(eps,Theta);
+               %Theta = max(eps,Theta);
                X(X == 0) = eps;
                X_approx(X_approx == 0) = eps;
 
               % Compute KL divergence element-wise
              kl_matrix = (X .* log(X ./ X_approx) - X + X_approx );
-             kl_est = (X .* log(X ./ X_est) - X + X_est);
+             kl_est = (X .* log(X / mu_X) - X + mu_X);
              % Sum over all elements to get total KL divergence
              objective = sum(kl_matrix(:)) / sum(kl_est(:));
 

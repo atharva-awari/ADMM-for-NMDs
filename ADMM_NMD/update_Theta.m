@@ -25,18 +25,16 @@ switch model
     Theta(p)=t2(p);
     Theta(q)=t1(q);
 
-    g1 = 1/2 * (X - t1).^2 + t1.*lambda + rho/2*(t1 - A).^2;
-    g2 = 1/2 * (X).^2 + t2.*lambda + rho/2*(t2 - A).^2;
+    g1 = 1/2 * (X - t1).^2 + t1.*lambda + ((rho/2)*(t1 - A).^2);
+    g2 = 1/2 * (X).^2 + t2.*lambda + ((rho/2)*(t2 - A).^2);
 
   
-
-
-    if g1(r)<g2(r)
-
-        Theta(r) = t1(r);
-    else
-        Theta(r) = t2(r);
-    end
+   
+   ind1 = find( g1(r)<g2(r) ) ;
+   ind2 = find (g1(r) >= g2(r));
+   Theta(r(ind1)) = t1(r(ind1));
+   Theta(r(ind2)) = t2(r(ind2));
+    
 
    %% ReLU with L1 norm
         case 'L1'
@@ -61,24 +59,23 @@ switch model
     t23 = X; 
     t2 = max(min(t22,X), t21); 
 
-    g1 = X +  t1.*lambda + rho/2*(t1 - A).^2;
+    g1 = X +  t1.*lambda + ((rho/2)*(t1 - A).^2);
     
 
-    g2 = abs(X - t2) + t2.*lambda + rho/2*(t2 - A).^2;
+    g2 = abs(X - t2) + t2.*lambda + ((rho/2)*(t2 - A).^2);
     
     
 
     Theta(p)=t2(p);
     Theta(q)=t1(q);
     Theta(r)=0;
+    
+    ind1 = find( g1(s)<g2(s) ) ;
+   ind2 = find (g1(s) >= g2(s));
+   Theta(s(ind1)) = t1(s(ind1));
+   Theta(s(ind2)) = t2(s(ind2));
 
-
-    if g1(s)<g2(s)
-
-        Theta(s) = t1(s);
-    else
-        Theta(s) = t2(s);
-    end
+   
 %% ReLU with KL-divergence
     
             
@@ -88,12 +85,12 @@ switch model
     p = find(X>0);
     q = find(X==0);
 
+    D = sqrt((lambda - rho*A + 1).^2 + 4*rho*X);
+    Theta(p) =  (rho*A(p) - lambda(p) - 1 + D(p))./ (2*rho);
     
-    Theta = max(eps,Theta);
 
-    Theta(p) = (1 / 2*rho) * ((rho*A(p) - lambda(p) - 1) + sqrt((lambda(p) - rho*A(p) + 1).^2 + 4*rho*X(p)));
-
-    t1 = (rho*A - lambda + 1) ./ rho;
+    
+    t1 = (rho*A - lambda - 1) ./ rho;
     t2 = (rho*A - lambda) ./ rho;
     
     Y = rho*A - lambda;
@@ -164,8 +161,8 @@ switch model
     else 
         t1 = sqrt(X);
         t2 = -sqrt(X); 
-        g1 = abs(X - (t1).^2) + lambda.*t1 + rho/2 .* (t1 - A).^2;
-        g2 = abs(X - (t2).^2) + lambda.*t2 + rho/2 .* (t2 - A).^2;
+        g1 = abs(X - (t1).^2) + lambda.*t1 + ((rho/2) .* (t1 - A).^2);
+        g2 = abs(X - (t2).^2) + lambda.*t2 + ((rho/2) .* (t2 - A).^2);
         l = find(g1<g2);
         m = find(g1>g2);
         Theta(l) = t1(l);
@@ -182,18 +179,20 @@ switch model
     p = find(X>0);
     q = find(X==0);
 
-    t1 = (rho*A - lambda + sqrt((lambda - rho*A).^2 + 8*X.*(rho+2))) ./ 2*(rho+2);
-    t2 = (rho*A - lambda - sqrt((lambda - rho*A).^2 + 8*X.*(rho+2))) ./ 2*(rho+2);
+    D = sqrt(((lambda - rho.*A).^2) + (8*X.*(rho+2)));
+    t1 = (rho.*A - lambda + D ) ./ (2*(rho+2));
+    t2 = (rho.*A - lambda - D) ./ (2*(rho+2));
 
-    g1 = t1.^2 - X.* log(t1.^2) + t1.*lambda + rho/2 .* (t1-A).^2;
-    g2 = t2.^2 - X.* log(t2.^2) + t2.*lambda + rho/2 .* (t2-A).^2;
+    g1 = t1.^2 - X.* log(t1.^2) + t1.*lambda + ((rho/2) .* (t1-A).^2);
+    g2 = t2.^2 - X.* log(t2.^2) + t2.*lambda + ((rho/2) .* (t2-A).^2);
 
-    if g1(p)<g2(p)
 
-   Theta(p) = t1(p);
-   else
-    Theta(p) = t2(p);
-   end
+   ind1 = find( g1(p)<g2(p) ) ;
+   ind2 = find (g1(p) >= g2(p));
+
+   Theta(p(ind1)) = t1(p(ind1));
+
+   Theta(p(ind2)) = t2(p(ind2));
 
 
     Theta(q) = (rho.*A(q) - lambda(q)) ./ (rho+2); 
@@ -260,33 +259,31 @@ switch model
     t3 = t1; 
 
 
-    g1 = 1/2 * (X-1).^2 +  t1.*lambda + rho/2*(t1 - A).^2;
+    g1 = 1/2 * (X-1).^2 +  t1.*lambda + ((rho/2)*(t1 - A).^2);
     
 
-    g2 = 1/2 * (X - t2).^2 + t2.*lambda + rho/2*(t2 - A).^2;
+    g2 = 1/2 * (X - t2).^2 + t2.*lambda + ((rho/2)*(t2 - A).^2);
 
-    g3 = 1/2 * (X+1).^2 +  t3.*lambda + rho/2*(t3 - A).^2;
+    g3 = 1/2 * (X+1).^2 +  t3.*lambda + ((rho/2)*(t3 - A).^2);
     
     
 
     Theta(c1)=t1(c1);
     Theta(c2)=t2(c2);
     Theta(c3)=t3(c3);
+    
+    ind1 = find( g2(c4)<g3(c4) ) ;
+    ind2 = find (g2(c4) >= g3(c4));
+    Theta(c4(ind1)) = t2(c4(ind1));
+    Theta(c4(ind2)) = t3(c4(ind2));
+    
+    
+    ind3 = find( g1(c5)<g2(c5) ) ;
+    ind4 = find (g1(c5) >= g2(c5));
+    Theta(c5(ind3)) = t1(c5(ind3));
+    Theta(c5(ind4)) = t2(c5(ind4));
 
-    if g2(c4)<g3(c4)
-
-       Theta(c4) = t2(c4);
-    else
-        Theta(c4) = t3(c4);
-    end
-
-
-    if g1(c5)<g2(c5)
-
-       Theta(c5) = t1(c5);
-    else
-        Theta(c5) = t2(c5);
-    end
+    
 
     Theta(c6)=b;
 
@@ -349,12 +346,12 @@ switch model
     t3 = t1; 
 
 
-    g1 = abs(X-a) +  t1.*lambda + rho/2*(t1 - A).^2;
+    g1 = abs(X-a) +  t1.*lambda + ((rho/2)*(t1 - A).^2);
     
 
-    g2 = abs(X - t2) + t2.*lambda + rho/2*(t2 - A).^2;
+    g2 = abs(X - t2) + t2.*lambda + ((rho/2)*(t2 - A).^2);
 
-    g3 = abs(X-b) +  t1.*lambda + rho/2*(t1 - A).^2;
+    g3 = abs(X-b) +  t1.*lambda + ((rho/2)*(t1 - A).^2);
     
     
 
@@ -362,22 +359,21 @@ switch model
     Theta(c2)=t2(c2);
     Theta(c3)=t1(c3);
 
-    if g1(c4)<g2(c4)
 
-       Theta(c4) = t1(c4);
-    else
-        Theta(c4) = t2(c4);
-    end
+    ind1 = find( g1(c4)<g2(c4) ) ;
+    ind2 = find (g1(c4) >= g2(c4));
+    Theta(c4(ind1)) = t1(c4(ind1));
+    Theta(c4(ind2)) = t2(c4(ind2));
+    
+    
 
     Theta(c5) = b; 
+    
 
-    if g2(c6)<g3(c6)
-
-       Theta(c6) = t2(c6);
-    else
-        Theta(c6) = t3(c6);
-    end
-
+    ind3 = find( g2(c6)<g3(c6) ) ;
+    ind4 = find (g2(c6) >= g3(c6));
+    Theta(c6(ind3)) = t2(c6(ind3));
+    Theta(c6(ind4)) = t3(c6(ind4));
     
 
     Theta(c7)=a;
@@ -389,10 +385,12 @@ switch model
     p = find(X>0);
     q = find(X==0);
 %% X > 0
-t11 = (1 / 2*rho) * (((rho*A - lambda - 1) + sqrt((lambda - rho*A + 1).^2 + 4*rho*X)));
-t22 = (1/rho) * (rho*A - lambda);
-
 D = sqrt((lambda - rho*A + 1).^2 + 4*rho*X);
+t11 = (rho*A - lambda) ./ (rho);
+t22 =(rho*A - lambda - 1 + D) ./ (2*rho);
+t33 = t11;
+
+
 Y = rho*A - lambda;
 
 c11 = find(Y>(rho*b));
@@ -428,35 +426,36 @@ c71 = find (Y > (2*rho*b + 1 - D));
 c72 = intersect(c33,c71);
 c7 = intersect(c72,p);
 
-g11 = t11 - X.* log(t11) + t11.*lambda + rho/2 .* (t11-A).^2;
-g22 = 1 + t22.*lambda + rho/2 .* (t22-A).^2;
+g11 = b - X.*log(b) + t11.*lambda + ((rho/2) .* (t11-A).^2);
+g22 = t22 - X.* log(t22) + t22.*lambda + ((rho/2) .* (t22-A).^2);
+g33 = a - X.*log(a) + t33.*lambda + ((rho/2) .* (t33-A).^2);
 
-Theta(c1) = t22(c1);
 
-if g11(c2) < g22(c2)
-    Theta(c2) = t11(c2);
-else
-    Theta(c2) = t22(c2);
-end
+Theta(c1) = t11(c1);
 
-Theta(c3) = t11(c3);
+ind1 = find( g11(c2)<g22(c2) ) ;
+ind2 = find (g11(c2) >= g22(c2));
+Theta(c2(ind1)) = t11(c2(ind1));
+Theta(c2(ind2)) = t22(c2(ind2));
+
+Theta(c3) = t22(c3);
 
 Theta(c4) = a;
 
-Theta(c5) = t22(c5); 
+Theta(c5) = t33(c5); 
 
-if g11(c6) < g22(c6)
-    Theta(c6) = t11(c6);
-else
-    Theta(c6) = t22(c6);
-end
+ind3 = find( g22(c6)<g33(c6) ) ;
+ind4 = find (g22(c6) >= g33(c6));
+Theta(c6(ind3)) = t22(c6(ind3));
+Theta(c6(ind4)) = t33(c6(ind4));
 
 Theta(c7) = b;
 
 
 %% X = 0
-t44 = (rho*A - lambda - 1) ./ rho;
-t33 = (rho*A - lambda) ./ rho;
+t44 = (rho*A - lambda) ./ rho;
+t55 = (rho*A - lambda - 1) ./ rho;
+t66 = t44;
 
 Y = rho*A - lambda;
 
@@ -483,21 +482,23 @@ q4 = intersect(q,y42);
 y51 = find(Y > (rho*b +1));
 q5 = intersect(q,y51);
 
-Theta(q1) = t33(q1);
+Theta(q1) = t44(q1);
 Theta(q2) = a; 
-Theta(q3) = t44(q3);
+Theta(q3) = t55(q3);
 
 
-g44 = t44  + t44.*lambda + rho/2 .* (t44-A).^2;
-g33 = 1 + t33.*lambda + rho/2 .* (t33-A).^2;
 
-if g33(q4) < g44(q4)
-    Theta(q4) = t33(q4);
-else
-    Theta(q4) = t44(q4);
-end
+g44 = a + t44.*lambda + ((rho/2) .* (t44-A).^2);
+g55 = t55  + t55.*lambda + ((rho/2) .* (t55-A).^2);
+g66 = b + t66.*lambda + ((rho/2) .* (t66-A).^2);
 
-Theta(q5) = t33(q5);
+ind5 = find( g55(q4)<g66(q4) ) ;
+ind6 = find (g55(q4) >= g66(q4));
+Theta(q4(ind5)) = t55(q4(ind5));
+Theta(q4(ind6)) = t66(q4(ind6));
+
+
+Theta(q5) = t66(q5);
 
         end
 
@@ -524,19 +525,17 @@ Theta(q5) = t33(q5);
     Theta(p)=t1(p);
     Theta(q)=t2(q);
 
-    g1 = 1/2 * (X - t1).^2 + t1.*lambda + rho/2*(t1 - A).^2;
-    g2 = 1/2 * (X + t2).^2 + t2.*lambda + rho/2*(t2 - A).^2;
+    g1 = 1/2 * (X - t1).^2 + t1.*lambda + ((rho/2)*(t1 - A).^2);
+    g2 = 1/2 * (X + t2).^2 + t2.*lambda + ((rho/2)*(t2 - A).^2);
 
     
 
+ind1 = find( g1(r)<g2(r) ) ;
+ind2 = find (g1(r) >= g2(r));
+Theta(r(ind1)) = t1(r(ind1));
+Theta(r(ind2)) = t2(r(ind2));
 
-
-    if g1(r)<g2(r)
-
-        Theta(r) = t1(r);
-    else
-        Theta(r) = t2(r);
-    end
+   
 
     %% Modulus woth L1-norm
 
@@ -560,22 +559,21 @@ Theta(q5) = t33(q5);
     t2 = max(min(t11,-X), t22); 
      
 
-    g1 = abs(X -t1) +  t1.*lambda + rho/2*(t1 - A).^2;
-    g2 = abs(X + t2) + t2.*lambda + rho/2*(t2 - A).^2;
+    g1 = abs(X -t1) +  t1.*lambda + ((rho/2)*(t1 - A).^2);
+    g2 = abs(X + t2) + t2.*lambda + ((rho/2)*(t2 - A).^2);
     
     
 
     Theta(p)=t1(p);
     Theta(q)=t2(q);
     
+ind1 = find( g1(r)<g2(r) ) ;
+ind2 = find (g1(r) >= g2(r));
+Theta(r(ind1)) = t1(r(ind1));
+Theta(r(ind2)) = t2(r(ind2));
 
-
-    if g1(r)<g2(r)
-
-        Theta(r) = t1(r);
-    else
-        Theta(r) = t2(r);
-    end
+    
+   
 
     %% Modulus with KL-divergence 
 
@@ -583,8 +581,8 @@ case 'KL divergence'
 
   p = find(X>0);
   q = find(X==0);
-
-Theta(p) = (1 / 2*rho) * ((rho*A(p) - lambda(p) - 1) + sqrt((lambda(p) - rho*A(p) + 1).^2 + 4*rho*X(p)));
+D = sqrt((lambda - rho*A + 1).^2 + 4*rho*X);
+Theta(p) =  (rho*A(p) - lambda(p) - 1 + D(p)) ./ (2*rho) ;
 
 t1 = (rho*A - lambda - 1) ./ rho;
 t2 = (rho*A - lambda +1) ./ rho;
