@@ -20,7 +20,7 @@ switch model
 
 
     t1 = (rho*A - lambda + X ) ./ (rho + 1);
-    t2 = (rho*A - lambda ) ./ (rho + 1);
+    t2 = (rho*A - lambda ) ./ (rho);
 
     Theta(p)=t2(p);
     Theta(q)=t1(q);
