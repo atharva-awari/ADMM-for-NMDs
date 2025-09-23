@@ -1,10 +1,14 @@
-function [Theta] = update_Theta(X,rho,Theta,lambda,A, model, error_measure, options)
+function [T] = update_T(X,rho,T,lambda,A, model, error_measure, param)
+%% This file contains all the updates for the matrix T, for all different 
+%% cases of nonlinearities and loss-functions. The user can add more nonlinear
+%% models and loss functions easily after solving one-dimensional subproblems
+%% for each entry of T
 
 switch model
  
      %% Case 1: ReLU with Frobenius norm
     case 'ReLU'
-
+   
         switch error_measure
             case 'Frobenius'
          
@@ -22,8 +26,8 @@ switch model
     t1 = (rho*A - lambda + X ) ./ (rho + 1);
     t2 = (rho*A - lambda ) ./ (rho);
 
-    Theta(p)=t2(p);
-    Theta(q)=t1(q);
+    T(p)=t2(p);
+    T(q)=t1(q);
 
     g1 = 1/2 * (X - t1).^2 + t1.*lambda + ((rho/2)*(t1 - A).^2);
     g2 = 1/2 * (X).^2 + t2.*lambda + ((rho/2)*(t2 - A).^2);
@@ -32,9 +36,9 @@ switch model
    
    ind1 = find( g1(r)<g2(r) ) ;
    ind2 = find (g1(r) >= g2(r));
-   Theta(r(ind1)) = t1(r(ind1));
-   Theta(r(ind2)) = t2(r(ind2));
-    
+   T(r(ind1)) = t1(r(ind1));
+   T(r(ind2)) = t2(r(ind2));
+   
 
    %% ReLU with L1 norm
         case 'L1'
@@ -66,14 +70,14 @@ switch model
     
     
 
-    Theta(p)=t2(p);
-    Theta(q)=t1(q);
-    Theta(r)=0;
+    T(p)=t2(p);
+    T(q)=t1(q);
+    T(r)=0;
     
     ind1 = find( g1(s)<g2(s) ) ;
    ind2 = find (g1(s) >= g2(s));
-   Theta(s(ind1)) = t1(s(ind1));
-   Theta(s(ind2)) = t2(s(ind2));
+   T(s(ind1)) = t1(s(ind1));
+   T(s(ind2)) = t2(s(ind2));
 
    
 %% ReLU with KL-divergence
@@ -86,7 +90,7 @@ switch model
     q = find(X==0);
 
     D = sqrt((lambda - rho*A + 1).^2 + 4*rho*X);
-    Theta(p) =  (rho*A(p) - lambda(p) - 1 + D(p))./ (2*rho);
+    T(p) =  (rho*A(p) - lambda(p) - 1 + D(p))./ (2*rho);
     
 
     
@@ -106,9 +110,9 @@ switch model
     y5 = intersect(y3,y4);
     q3 = intersect(q,y5); 
 
-    Theta(q1) = t1(q1);
-    Theta(q2) = t2(q2); 
-    Theta(q3) = 0;
+    T(q1) = t1(q1);
+    T(q2) = t2(q2); 
+    T(q3) = 0;
 
         end
 
@@ -126,7 +130,7 @@ switch model
             a =2;
             c =rho - 2 * X(i,j);
             d = lambda(i,j) - rho * A(i,j);
-            Theta(i,j) = cardanoatharva(a,c, d);
+            T(i,j) = cardanoatharva(a,c, d);
         end
         end
 
@@ -153,9 +157,9 @@ switch model
     t2 = (rho*A - lambda) ./ (rho+2);
     
     
-    Theta(r)=t2(r);
-    Theta(v)=t2(v);
-    Theta(s)=t1(s);
+    T(r)=t2(r);
+    T(v)=t2(v);
+    T(s)=t1(s);
     
 
     else 
@@ -165,8 +169,8 @@ switch model
         g2 = abs(X - (t2).^2) + lambda.*t2 + ((rho/2) .* (t2 - A).^2);
         l = find(g1<g2);
         m = find(g1>g2);
-        Theta(l) = t1(l);
-        Theta(m) = t2(m); 
+        T(l) = t1(l);
+        T(m) = t2(m); 
 
         
     end
@@ -190,12 +194,12 @@ switch model
    ind1 = find( g1(p)<g2(p) ) ;
    ind2 = find (g1(p) >= g2(p));
 
-   Theta(p(ind1)) = t1(p(ind1));
+   T(p(ind1)) = t1(p(ind1));
 
-   Theta(p(ind2)) = t2(p(ind2));
+   T(p(ind2)) = t2(p(ind2));
 
 
-    Theta(q) = (rho.*A(q) - lambda(q)) ./ (rho+2); 
+    T(q) = (rho.*A(q) - lambda(q)) ./ (rho+2); 
 
         end
 
@@ -203,8 +207,8 @@ switch model
     case 'MinMax'
        
 
-        a = options.a;
-        b = options.b;
+        a = param.a;
+        b = param.b;
         
         switch error_measure
 
@@ -268,26 +272,26 @@ switch model
     
     
 
-    Theta(c1)=t1(c1);
-    Theta(c2)=t2(c2);
-    Theta(c3)=t3(c3);
+    T(c1)=t1(c1);
+    T(c2)=t2(c2);
+    T(c3)=t3(c3);
     
     ind1 = find( g2(c4)<g3(c4) ) ;
     ind2 = find (g2(c4) >= g3(c4));
-    Theta(c4(ind1)) = t2(c4(ind1));
-    Theta(c4(ind2)) = t3(c4(ind2));
+    T(c4(ind1)) = t2(c4(ind1));
+    T(c4(ind2)) = t3(c4(ind2));
     
     
     ind3 = find( g1(c5)<g2(c5) ) ;
     ind4 = find (g1(c5) >= g2(c5));
-    Theta(c5(ind3)) = t1(c5(ind3));
-    Theta(c5(ind4)) = t2(c5(ind4));
+    T(c5(ind3)) = t1(c5(ind3));
+    T(c5(ind4)) = t2(c5(ind4));
 
     
 
-    Theta(c6)=b;
+    T(c6)=b;
 
-    Theta(c7)=a;
+    T(c7)=a;
 
 %% MinMax with L1-norm
     case 'L1'
@@ -355,28 +359,28 @@ switch model
     
     
 
-    Theta(c1)=t3(c1);
-    Theta(c2)=t2(c2);
-    Theta(c3)=t1(c3);
+    T(c1)=t3(c1);
+    T(c2)=t2(c2);
+    T(c3)=t1(c3);
 
 
     ind1 = find( g1(c4)<g2(c4) ) ;
     ind2 = find (g1(c4) >= g2(c4));
-    Theta(c4(ind1)) = t1(c4(ind1));
-    Theta(c4(ind2)) = t2(c4(ind2));
+    T(c4(ind1)) = t1(c4(ind1));
+    T(c4(ind2)) = t2(c4(ind2));
     
     
 
-    Theta(c5) = b; 
+    T(c5) = b; 
     
 
     ind3 = find( g2(c6)<g3(c6) ) ;
     ind4 = find (g2(c6) >= g3(c6));
-    Theta(c6(ind3)) = t2(c6(ind3));
-    Theta(c6(ind4)) = t3(c6(ind4));
+    T(c6(ind3)) = t2(c6(ind3));
+    T(c6(ind4)) = t3(c6(ind4));
     
 
-    Theta(c7)=a;
+    T(c7)=a;
 
 %% MinMax with KL-divergence
 
@@ -431,25 +435,25 @@ g22 = t22 - X.* log(t22) + t22.*lambda + ((rho/2) .* (t22-A).^2);
 g33 = a - X.*log(a) + t33.*lambda + ((rho/2) .* (t33-A).^2);
 
 
-Theta(c1) = t11(c1);
+T(c1) = t11(c1);
 
 ind1 = find( g11(c2)<g22(c2) ) ;
 ind2 = find (g11(c2) >= g22(c2));
 Theta(c2(ind1)) = t11(c2(ind1));
 Theta(c2(ind2)) = t22(c2(ind2));
 
-Theta(c3) = t22(c3);
+T(c3) = t22(c3);
 
-Theta(c4) = a;
+T(c4) = a;
 
-Theta(c5) = t33(c5); 
+T(c5) = t33(c5); 
 
 ind3 = find( g22(c6)<g33(c6) ) ;
 ind4 = find (g22(c6) >= g33(c6));
-Theta(c6(ind3)) = t22(c6(ind3));
-Theta(c6(ind4)) = t33(c6(ind4));
+T(c6(ind3)) = t22(c6(ind3));
+T(c6(ind4)) = t33(c6(ind4));
 
-Theta(c7) = b;
+T(c7) = b;
 
 
 %% X = 0
@@ -482,9 +486,9 @@ q4 = intersect(q,y42);
 y51 = find(Y > (rho*b +1));
 q5 = intersect(q,y51);
 
-Theta(q1) = t44(q1);
-Theta(q2) = a; 
-Theta(q3) = t55(q3);
+T(q1) = t44(q1);
+T(q2) = a; 
+T(q3) = t55(q3);
 
 
 
@@ -494,11 +498,11 @@ g66 = b + t66.*lambda + ((rho/2) .* (t66-A).^2);
 
 ind5 = find( g55(q4)<g66(q4) ) ;
 ind6 = find (g55(q4) >= g66(q4));
-Theta(q4(ind5)) = t55(q4(ind5));
-Theta(q4(ind6)) = t66(q4(ind6));
+T(q4(ind5)) = t55(q4(ind5));
+T(q4(ind6)) = t66(q4(ind6));
 
 
-Theta(q5) = t66(q5);
+T(q5) = t66(q5);
 
         end
 
@@ -522,8 +526,8 @@ Theta(q5) = t66(q5);
     t1 = (rho*A - lambda + X ) ./ (rho + 1);
     t2 = (rho*A - lambda - X ) ./ (rho + 1);
 
-    Theta(p)=t1(p);
-    Theta(q)=t2(q);
+    T(p)=t1(p);
+    T(q)=t2(q);
 
     g1 = 1/2 * (X - t1).^2 + t1.*lambda + ((rho/2)*(t1 - A).^2);
     g2 = 1/2 * (X + t2).^2 + t2.*lambda + ((rho/2)*(t2 - A).^2);
@@ -532,8 +536,8 @@ Theta(q5) = t66(q5);
 
 ind1 = find( g1(r)<g2(r) ) ;
 ind2 = find (g1(r) >= g2(r));
-Theta(r(ind1)) = t1(r(ind1));
-Theta(r(ind2)) = t2(r(ind2));
+T(r(ind1)) = t1(r(ind1));
+T(r(ind2)) = t2(r(ind2));
 
    
 
@@ -564,13 +568,13 @@ Theta(r(ind2)) = t2(r(ind2));
     
     
 
-    Theta(p)=t1(p);
-    Theta(q)=t2(q);
+    T(p)=t1(p);
+    T(q)=t2(q);
     
 ind1 = find( g1(r)<g2(r) ) ;
 ind2 = find (g1(r) >= g2(r));
-Theta(r(ind1)) = t1(r(ind1));
-Theta(r(ind2)) = t2(r(ind2));
+T(r(ind1)) = t1(r(ind1));
+T(r(ind2)) = t2(r(ind2));
 
     
    
@@ -582,7 +586,7 @@ case 'KL divergence'
   p = find(X>0);
   q = find(X==0);
 D = sqrt((lambda - rho*A + 1).^2 + 4*rho*X);
-Theta(p) =  (rho*A(p) - lambda(p) - 1 + D(p)) ./ (2*rho) ;
+T(p) =  (rho*A(p) - lambda(p) - 1 + D(p)) ./ (2*rho) ;
 
 t1 = (rho*A - lambda - 1) ./ rho;
 t2 = (rho*A - lambda +1) ./ rho;
@@ -600,9 +604,9 @@ y4 = find(Y<1);
 y5 = intersect(y3,y4);
 q3 = intersect(q,y5); 
 
-Theta(q1) = t1(q1);
-Theta(q2) = t2(q2); 
-Theta(q3) = 0;
+T(q1) = t1(q1);
+T(q2) = t2(q2); 
+T(q3) = 0;
 
 
         end
