@@ -1,4 +1,4 @@
-function [T, W, H, residual, objective, rho] = admm_nmd(X,r,model, error_measure, param)
+function results = admm_nmd(X,r,model, error_measure, param)
 
 
 % Computes an approximate solution of the following non linear matrix
@@ -12,12 +12,6 @@ function [T, W, H, residual, objective, rho] = admm_nmd(X,r,model, error_measure
 
 %****** Input ******
 %   X       : m-by-n matrix.
-%           For ReLU: the matrix should be nonnegative and sparse.
-%           For CSF : the matrix should be nonnegative. 
-%           For MinMax: The entries of the matrix should lie in the
-%           interval [a,b]. The interval can be specified by the user. 
-%           For Modulus: the matrix should be nonnegative.
-
 %   r       : scalar, desired approximation rank
 %   param   : structure, containing the parameters of the algorithm .
 %       .Theta0 = initialization of the variable Theta (default: randn).
@@ -31,6 +25,11 @@ function [T, W, H, residual, objective, rho] = admm_nmd(X,r,model, error_measure
 %       For using MinMax model, specify the interval [a,b] (default: [0,1].
 %       .a      = initial point of the interval.
 %       .b      = end point of the interval.
+%       .task   = matrix_completion
+%       .mask   = mask for observed entries
+%       .p_obs  = percentage of observed entries in matrix completion.
+%       .B      = corrupted matrix with noise and missing entries. 
+
 % ****** Output ******
 %   T       : m-by-n matrix, approximate solution of
 %            min_{W,H, T} d(X , f(T))  s.t. T = WH
@@ -49,6 +48,27 @@ function [T, W, H, residual, objective, rho] = admm_nmd(X,r,model, error_measure
 % function, solve the one-dimensional subproblems for each entry of T and
 % add it to update_T.m file. 
 %%
+if strcmpi(model,'ReLU')
+    if min(X(:)) < 0
+        warning('The input matrix contains negative entries, not ideal for ReLU-NMD.');
+    end
+end
+if strcmpi(model,'CSF')
+    if min(X(:)) < 0
+        warning('The input matrix contains negative entries, not ideal for CSF.');
+    end
+end
+if strcmpi(model,'MinMax')
+    if min(X(:)) < param.a && max(X(:)) > param.b
+        warning('The input matrix contains entries which do not lie in the interval [a,b], not ideal for MinMax model.');
+    end
+end
+if strcmpi(model,'Modulus')
+    if min(X(:)) < 0
+        warning('The input matrix contains negative entries, not ideal for Modulus.');
+    end
+end
+
 [m,n]=size(X); 
  if nargin < 5
     param = [];
@@ -81,6 +101,9 @@ end
 if ~isfield(param,'b')
     param.b = 1;
 end
+if ~isfield(param,'task')
+    param.task=[];
+end
 
 
 cpu0=tic;
@@ -98,6 +121,13 @@ if strcmpi(error_measure, 'KL divergence')
  X(X==0)=eps;
 else 
     T=param.T;
+end
+
+if strcmpi(param.task, 'Matrix completion')
+    M = param.mask;
+    M_test = 1-M;
+    p_obs = param.p_obs;
+    B = param.B;
 end
 
 
@@ -124,7 +154,11 @@ savetime(k)=runtime;
 
 rho(k) =1 ;
 
+if strcmpi(param.task, 'Matrix completion')
+    [rmse_test(k),rmse_train(k)]= rmse_comp(X, W, H, model, param);
+else
 [residual(k), objective(k)] = compute_residual_objective(X, W, H, T, model, error_measure, param);
+end
 
 
 while k < maxiter && runtime<maxtime
@@ -143,7 +177,14 @@ while k < maxiter && runtime<maxtime
 
     A = W*H;
     T_prev = T; 
-    [T] = update_T(X,rho(k),T,lambda,A, model, error_measure, param);
+
+    if strcmpi(param.task, 'Matrix completion')
+         [T] = update_T(B,rho(k),T,lambda,A, model, error_measure, param);
+         T(M==0) = rho(k)* A(M==0) - lambda(M==0) ./ rho(k) ;
+
+    else
+         [T] = update_T(X,rho(k),T,lambda,A, model, error_measure, param);
+    end
 
     lambda = lambda + rho(k)*(T - A);
 
@@ -176,14 +217,61 @@ end
     compute_obj=compute_obj+toc(start_obj);
     runtime=toc(cpu0)-compute_obj;
     savetime(k)=runtime;
-
+    
+    if strcmpi(param.task, 'Matrix completion')
+    [rmse_test(k),rmse_train(k)]= rmse_comp(X, W, H, model, param);
+    else
     [residual(k), objective(k)] = compute_residual_objective(X, W, H, T, model, error_measure, param);
-
+    end
+   
 
 end
 
-%Plotting objective and residual
+%% Results
+% Make sure optional variables exist (otherwise MATLAB complains)
+if ~exist('rmse_train','var'), rmse_train = []; end
+if ~exist('rmse_test','var'),  rmse_test  = []; end
+if ~exist('residual','var'), residual = []; end
+if ~exist('objective','var'),  objective  = []; end
+if ~exist('rho','var'),        rho        = []; end
+if ~exist('iter','var'),       iter       = NaN; end
+if ~exist('status_msg','var'), status_msg = 'unknown'; end
 
+
+% Build results struct
+results = struct();
+results.T           = T;
+results.W           = W;
+results.H           = H;
+results.residual    = residual;
+results.objective   = objective;
+results.rmse_train  = rmse_train;
+results.rmse_test   = rmse_test;
+results.rho         = rho;
+
+
+% Keep the parameters actually used
+results.param = param;
+%%
+
+if strcmpi(param.task, 'Matrix completion')
+% Plotting RMSE
+
+subplot(1,2,1)
+plot(rmse_test,'b','LineWidth',1.5);hold on; 
+hold on
+
+xlabel('Iterations');
+ylabel('RMSE on Test data');
+
+subplot(1,2,2)
+plot(rmse_train,'r','LineWidth',1.5);hold on; 
+
+ylabel('RMSE on Train data');
+xlabel('Iterations'); 
+
+else
+%Plotting objective and residual
 subplot(1,2,1)
 semilogy(objective,'b','LineWidth',1.5);hold on; 
 hold on
@@ -196,3 +284,5 @@ semilogy(residual,'r','LineWidth',1.5);hold on;
 
 ylabel('Residual');
 xlabel('Iterations'); 
+
+end
