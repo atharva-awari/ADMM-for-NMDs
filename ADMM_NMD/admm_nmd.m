@@ -145,18 +145,18 @@ else
     T=param.T;
 end
 if isfield(param, 'mask') && ~isempty(param.mask)
+    if param.display==1
     disp('This is a matrix completion task');
     disp('RMSE computation for missing entries will be performed. Display of iterations and RMSE on test data:');
-    M = param.mask;
-    if isfield(param,'B')
-        B = param.B;
-    else
-        warning('param.B, the matrix with corrupted entries is not provided. Using X as the data matrix.');
-        B = X;        % fallback to X
     end
+    M = param.mask;
+    B    = zeros(m,n);
+    B(M) = X(M); % Create a matrix with only observed entries of X as per the mask provided by the user.
 else
+    if param.display==1
     disp('Full data factorization mode detected.');
     disp('Display of iteration number and relative error in %:');
+    end
 end
 k=1;
 start_obj=tic;
@@ -296,6 +296,7 @@ if param.display==1
         % --- Overall figure title ---
         sgtitle('RMSE Evolution During ADMM Iterations','Interpreter','latex','FontSize',18);
     else
+        figure('Name','ADMM evolution of errors','NumberTitle','off');
         subplot(1,2,1);
         semilogy(objective,'b-','LineWidth',2); grid on;
         xlabel('Iterations','Interpreter','latex','FontSize',16);
