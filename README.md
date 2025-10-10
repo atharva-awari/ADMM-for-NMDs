@@ -1,7 +1,6 @@
 # ADMM for Nonlinear Matrix Decompositions (NMD)
 
-Given a data matrix $X \in \mathbb{R}^{m \times n}$ and a rank $r \ll \min(m,n)$,  
-we solve the nonlinear matrix decomposition problem:
+Given a data matrix $X \in \mathbb{R}^{m \times n}$ and a rank $r \ll \min(m,n)$, we solve the nonlinear matrix decomposition problem:
 
 $$
 \min_{T,\,W,\,H} \; d(X, f(T))
