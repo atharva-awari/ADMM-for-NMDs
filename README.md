@@ -47,7 +47,7 @@ where:
   \sqrt{\sum_{i=1}^m \sum_{j=1}^n \big( X_{ij} - [f(T)]_{ij} \big)^2}
   $$
 
-- **\(\ell_1\) norm**
+- **\(L_1\) norm**
   $$
   \lVert X - f(T) \rVert_1
   \;=\;
