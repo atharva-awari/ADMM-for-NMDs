@@ -1,0 +1,78 @@
+clear all;close all; clc;
+rng(2025);
+Y=load('mnist_all.mat');
+%w1=1:10:500; %Number of images for each digit
+w1=1:20;
+X=[Y.train0(w1,:);Y.train1(w1,:);Y.train2(w1,:);Y.train3(w1,:);Y.train4(w1,:);...
+    Y.train5(w1,:);Y.train6(w1,:);Y.train7(w1,:);Y.train8(w1,:);Y.train9(w1,:)];
+X=double(X);
+X = X / max(X(:));
+[m,n]=size(X);
+
+% ADMM parameters
+r =32;
+param.maxiter = inf;
+param.maxtime =20;
+param.display=0;
+% Noise levels to test
+noise_levels = [0.00, 0.05, 0.10, 0.15, 0.20];  % % of noise
+num_levels = length(noise_levels);
+
+% Loop over noise levels
+for i = 1:num_levels
+    noise_ratio = noise_levels(i);
+    num_outliers = round(noise_ratio * numel(X));
+
+    X_noisy = X;
+    if noise_ratio > 0
+        indices = randperm(numel(X), num_outliers);
+        X_noisy(indices) = rand(1, num_outliers);  % random noise
+    end
+    % Save noisy version
+    X_noisy_list{i} = X_noisy;
+
+    % --- ReLU + Frobenius ---
+    model = 'ReLU';
+    error_measure = 'Frobenius';
+    results_fro(i) = admm_nmd(X_noisy,r,model,error_measure,param);
+    X_recon_fro{i} = max(0, results_fro(i).W * results_fro(i).H);
+
+    % --- ReLU + L1 ---
+    error_measure = 'L1';
+    results_L1(i) = admm_nmd(X_noisy,r,model,error_measure,param);
+    X_recon_l1{i} = max(0, results_L1(i).W * results_L1(i).H);
+end
+
+%% ===== Visualization: one digit across noise levels and reconstructions =====
+% Choose which digit and which example within that digit to display
+digit_to_show = 8;        % 0..9
+k_within_digit = 5;       % 1..numel(w1), since we used w1 = 1:10
+
+num_per_digit = numel(w1);
+row_idx = digit_to_show * num_per_digit + k_within_digit;   % 1-based indexing
+
+% Figure layout: 3 rows (Noisy, ReLU+Frobenius, ReLU+L1) x num_levels columns
+figure('Color','w','Name','MNIST: Noisy vs Reconstructions across noise levels');
+
+for i = 1:num_levels
+    % ----- Row 1: Noisy input -----
+    subplot(3, num_levels, i);
+    im_noisy = reshape(X_noisy_list{i}(row_idx, :), 28, 28)';   % transpose for natural orientation
+    imagesc(im_noisy); axis image off; colormap gray;
+    title(sprintf('Noise %d%%', round(100*noise_levels(i))));
+    if i == 1, ylabel('Noisy input'); end
+
+    % ----- Row 2: ReLU + Frobenius reconstruction -----
+    subplot(3, num_levels, num_levels + i);
+    im_fro = reshape(X_recon_fro{i}(row_idx, :), 28, 28)';
+    imagesc(im_fro); axis image off;
+    if i == 1, ylabel('ReLU + Frobenius'); end
+
+    % ----- Row 3: ReLU + L1 reconstruction -----
+    subplot(3, num_levels, 2*num_levels + i);
+    im_l1 = reshape(X_recon_l1{i}(row_idx, :), 28, 28)';
+    imagesc(im_l1); axis image off;
+    if i == 1, ylabel('ReLU + L1'); end
+end
+
+sgtitle(sprintf('Digit %d (example %d) across noise levels', digit_to_show, k_within_digit));

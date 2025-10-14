@@ -13,9 +13,8 @@ function results = admm_nmd(X,r,model, error_measure, param)
 %   r          : scalar, desired approximation rank
 %   model      : Select nonlinearity among: ReLU, CSF, MinMax, Modulus
 % error_measure: Select the loss function among: Frobenius, L1, KL divergence
-
 %   param   : structure, containing the parameters of the algorithm .
-%       .Theta0 = initialization of the variable Theta (default: randn).
+%       .T0     = initialization of the variable T (default: randn).
 %       .W0     = initialization of the variable W (default: randn).
 %       .H0     = initialization of the variable H (default: randn).
 %       .lambda = initialization of the Lagrange Multiplier (default: randn).
@@ -105,7 +104,7 @@ end
 if ~isfield(param,'maxtime')
     param.maxtime = 10;
 end
-if ~isfield(param,'Theta')
+if ~isfield(param,'T')
     param.T = randn(m,n);
 end
 if ~isfield(param,'lambda')
@@ -125,6 +124,9 @@ if ~isfield(param,'validmask')
 end
 if ~isfield(param,'display')
     param.display = 1;
+end
+if ~isfield(param, 'update')
+    param.update='svd';
 end
 cpu0=tic;
 timedisplay = 0.1; cntdisp = 0;
@@ -146,16 +148,16 @@ else
 end
 if isfield(param, 'mask') && ~isempty(param.mask)
     if param.display==1
-    disp('This is a matrix completion task');
-    disp('RMSE computation for missing entries will be performed. Display of iterations and RMSE on test data:');
+        disp('This is a matrix completion task');
+        disp('RMSE computation for missing entries will be performed. Display of iterations and RMSE on test data:');
     end
     M = param.mask;
     B    = zeros(m,n);
     B(M) = X(M); % Create a matrix with only observed entries of X as per the mask provided by the user.
 else
     if param.display==1
-    disp('Full data factorization mode detected.');
-    disp('Display of iteration number and relative error in %:');
+        disp('Full data factorization mode detected.');
+        disp('Display of iteration number and relative error in %:');
     end
 end
 k=1;
@@ -163,6 +165,8 @@ start_obj=tic;
 compute_obj=compute_obj+toc(start_obj);
 runtime=toc(cpu0)-compute_obj;
 savetime(k)=runtime;
+% Setting initial value for penalty parameter rho
+rho(k) =1 ;
 
 %% Scaling W and H
 for i = 1:r
@@ -175,9 +179,10 @@ for i = 1:r
     W(:, i) = (W(:, i) / norm_w) * norm_h;
     H(i, :) = (H(i, :) / norm_h) * norm_w;
 end
-% Setting initial value for penalty paramter rho
-rho(k) =1 ;
+%% Scaling W and H according to the data X
 A = W*H;
+optscal = sum(sum(A.*X))/sum(A(:).^2);
+W = optscal*W;
 % Computing initial RMSE/Relative error
 if isfield(param, 'mask') && ~isempty(param.mask)
     [rmse_test(k),rmse_train(k)]= rmse_comp(X, A, model, param);
@@ -186,23 +191,23 @@ else
 end
 %% Running the main loop of ADMM for NMD
 while k < maxiter && runtime<maxtime
-    %Updating W (model independent update)
-    Ht=H';
-    HHt=H*Ht;
-    LW=norm(HHt);
-    W=W+1/(rho(k)*LW)*(lambda*Ht-rho(k)*(W*HHt-T*Ht));
-    %Updating H (model independent update)
-    Wt=W';
-    WtW=Wt*W;
-    LH=norm(WtW);
-    H=H+1/(rho(k)*LH)*(Wt*lambda-rho(k)*(WtW*H-Wt*T));
+    if strcmpi(param.update,'random')
+        %% Updating W and H using closed form solution
+        W = (1/rho(k)) * ((H*H') \ (H* lambda' + rho(k) * H * T'));
+        W = W';
+        H = (1/rho(k)) * ((W'*W) \ (W' * lambda + rho(k) * W' * T)); 
+    else
+        [U,S,V] = svds(T+ (lambda./rho(k)),r);
+        W = U*sqrt(S);
+        H = sqrt(S)*V';
+    end
     %Define A=WH for simplicity
     A = W*H;
     T_prev = T;
     % Updating T, depending on the task of full factorization or matrix completion
     if isfield(param, 'mask') && ~isempty(param.mask)
         [T] = update_T(B,rho(k),T,lambda,A, model, error_measure, param);
-        T(M==0) = rho(k)* A(M==0) - lambda(M==0) ./ rho(k) ;
+        T(M==0) = A(M==0) - (lambda(M==0)./rho(k));
     else
         [T] = update_T(X,rho(k),T,lambda,A, model, error_measure, param);
     end
@@ -220,7 +225,7 @@ while k < maxiter && runtime<maxtime
     elseif d_residual > mu*p_residual
         rho(k+1) = rho(k)/t_decr;
     else
-        rho(k+1) =rho(k);
+        rho(k+1) = rho(k);
     end
     %%
     k=k+1;
@@ -234,7 +239,7 @@ while k < maxiter && runtime<maxtime
     else
         [residual(k), objective(k)] = compute_residual_objective(X, A , T, model, error_measure, param);
     end
-    %%
+    %% Displaying iteration number and errors on the command screen
     if param.display == 1
         if toc(cpu0) >= timedisplay
             if isfield(param, 'mask') && ~isempty(param.mask)

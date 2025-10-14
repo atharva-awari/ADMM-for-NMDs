@@ -9,7 +9,7 @@ error_measure = 'Frobenius'; %Choose the error measure among: 'Frobenius','L1' (
 param.maxiter = inf;
 param.maxtime = 5;
 
-%param.a=0; param.b = 1; %If the user wants to use MinMax model, define the desired interval [a,b]
+param.a=0; param.b = 1; %If the user wants to use MinMax model, define the desired interval [a,b]
 
 %% Data
 m      = 200;
