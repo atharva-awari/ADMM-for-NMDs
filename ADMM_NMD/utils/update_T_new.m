@@ -1,0 +1,232 @@
+function [T] = update_T_new(X,rho,T,lambda,A, model, error_measure, param)
+%% This file contains all the updates for the matrix T, for all different
+%% cases of nonlinearities and loss-functions. The user can add more nonlinear
+%% models and loss functions easily after solving one-dimensional subproblems
+%% for each entry of T
+switch model
+    %% Case 1: ReLU with Frobenius norm
+    case 'ReLU'
+        switch error_measure
+            case 'Frobenius'
+                Y=lambda - rho*A;
+                p= find(Y>X);
+                q= find(Y<0);
+                r1= find(Y>0);
+                r2= find(Y<X);
+                r= intersect(r1,r2);
+                t1 = (rho*A - lambda + X )./(rho + 1);
+                t2 = (rho*A - lambda) ./ (rho);
+                T(p)=t2(p);
+                T(q)=t1(q);
+                g1 = 1/2 * (X - t1).^2 + t1.*lambda + ((rho/2)*(t1 - A).^2);
+                g2 = 1/2 * (X).^2 + t2.*lambda + ((rho/2)*(t2 - A).^2);
+                ind1 = find(g1(r)<g2(r)) ;
+                ind2 = find(g1(r)>=g2(r));
+                T(r(ind1)) = t1(r(ind1));
+                T(r(ind2)) = t2(r(ind2));
+                %% ReLU with L1 norm
+            case 'L1'
+
+                tmin = A - lambda./rho;
+                t1star = min(tmin, 0);
+                t21 = (rho*A - lambda -1 )./(rho);
+                t22 = (rho*A - lambda +1 )./(rho);
+                t23 = X;
+                tmax  = max(min(t22,t23), t21);
+                t2star =max(tmax, 0);
+                g1  = X +  t1star.*lambda + ((rho/2)*(t1star - A).^2);
+                g2  = abs(X - t2star) + t2star.*lambda + ((rho/2)*(t2star - A).^2);
+                T = t1star;
+                ind2better = g2 < g1; T(ind2better) = t2star(ind2better);
+                
+                %% ReLU with KL-divergence
+            case 'KL divergence'  
+                tmax = (rho*A - lambda - 1)./rho;
+                t1star= max(tmax,0);
+                tmin = (rho*A - lambda)./rho;
+                t2star=min(tmin,0);
+                g1  = t1star +  t1star.*lambda + ((rho/2)*(t1star - A).^2);
+                g2  = t2star.*lambda + ((rho/2)*(t2star - A).^2);
+                T = t1star;
+                ind2better = g2 < g1; T(ind2better) = t2star(ind2better);
+                p = find(X>0);
+                D = sqrt((lambda - rho*A + 1).^2 + 4*rho*X);
+                T(p) = (rho*A(p) - lambda(p) - 1 + D(p))./(2*rho);
+        end
+        %% CSF with frobenius norm
+    case 'CSF'
+        [m,n] = size(X);
+        switch error_measure
+            case 'Frobenius'
+                for i=1:m
+                    for j=1:n
+                        a =2;
+                        c =rho - 2 * X(i,j);
+                        d = lambda(i,j) - rho * A(i,j);
+                        T(i,j) = cardanoatharva(a,c, d);
+                    end
+                end
+                %% CSF with L1 norm
+            case 'L1'
+                if rho>2
+                    tmin = (rho*A - lambda)./(rho-2);
+                    sqrtX=sqrt(X);
+                    t1star= min(sqrt(X), max(-sqrt(X),tmin));
+                    tmax = (rho*A - lambda)./(rho+2);
+                    t2star = max(tmax,sqrtX);
+                    t3star = min(tmax, -sqrtX);
+                    g1 = X - t1star.^2 + t1star.*lambda + (rho/2)*(t1star - A).^2 ;
+                    g2 = t2star.^2 - X + t2star.*lambda + (rho/2)*(t2star - A).^2 ;
+                    g3 = t3star.^2 - X + t3star.*lambda + (rho/2)*(t3star - A).^2;
+                    T = t1star;
+                    ind2better = g2 < g1 & g2 <= g3; T(ind2better) = t2star(ind2better);
+                    ind3better = g3 < g1 & g3 < g2; T(ind3better) = t3star(ind3better);
+                else
+                    t1 = sqrt(X);
+                    t2 = -sqrt(X);
+                    g1 = abs(X - (t1).^2) + lambda.*t1 + ((rho/2).*(t1 - A).^2);
+                    g2 = abs(X - (t2).^2) + lambda.*t2 + ((rho/2).*(t2 - A).^2);
+                    l  = find(g1<g2);
+                    m  = find(g1>g2);
+                    T(l) = t1(l);
+                    T(m) = t2(m);
+                end
+
+                %% CSF with KL-divergence
+            case 'KL divergence'
+                p  = find(X>0);
+                q  = find(X==0);
+                D  = sqrt(((lambda - rho.*A).^2) + (8*X.*(rho+2)));
+                t1 = (rho.*A - lambda + D)./(2*(rho+2));
+                t2 = (rho.*A - lambda - D)./(2*(rho+2));
+                g1 = t1.^2 - X.* log(t1.^2) + t1.*lambda + ((rho/2).*(t1-A).^2);
+                g2 = t2.^2 - X.* log(t2.^2) + t2.*lambda + ((rho/2).*(t2-A).^2);
+                ind1 = find(g1(p)<g2(p));
+                ind2 = find(g1(p)>=g2(p));
+                T(p(ind1)) = t1(p(ind1));
+                T(p(ind2)) = t2(p(ind2));
+                T(q) = (rho.*A(q) - lambda(q))./(rho+2);
+        end
+        %% MinMax with Frobenius norm
+    case 'MinMax'
+        a = param.a;
+        b = param.b;
+        switch error_measure
+            case 'Frobenius'         
+                tmin = A - lambda./rho;
+                t1star = min(tmin, a);
+                t3star = max(tmin, b);
+                t_med = (X + rho*A - lambda) ./ (rho+1);
+                t2star = min(max(t_med, a), b);
+                g1 = 0.5*(X - a).^2 + t1star.*lambda + (rho/2)*(t1star - A).^2 ;
+                g2 = 0.5*(X - t2star).^2 + t2star.*lambda + (rho/2)*(t2star - A).^2 ;
+                g3 = 0.5*(X - b).^2 + t3star.*lambda + (rho/2)*(t3star - A).^2;
+                T = t1star;
+                ind2better = g2 < g1 & g2 <= g3; T(ind2better) = t2star(ind2better);
+                ind3better = g3 < g1 & g3 < g2; T(ind3better) = t3star(ind3better);
+                %% MinMax with L1-norm
+            case 'L1'
+                
+                tmin = A - lambda./rho;
+                t1star = min(tmin, a);
+                t3star = max(tmin, b);
+                t_med = max(min(tmin + 1./rho, X), tmin - 1./rho);
+                t2star = min(max(t_med, a), b);
+                g1 = abs(X - a) + t1star.*lambda + (rho/2)*(t1star - A).^2 ;
+                g2 = abs(X - t2star) + t2star.*lambda + (rho/2)*(t2star - A).^2 ;
+                g3 = abs(X - b) + t3star.*lambda + (rho/2)*(t3star - A).^2;
+                T = t1star;
+                ind2better = g2 < g1 & g2 <= g3; T(ind2better) = t2star(ind2better);
+                ind3better = g3 < g1 & g3 < g2; T(ind3better) = t3star(ind3better);
+                %% MinMax with KL-divergence
+            case 'KL divergence'
+                p = find(X>0);
+                q = find(X==0);
+                %% For X>0
+                tmin = A - lambda./rho;
+                t1star = min(tmin, a);
+                t3star = max(tmin, b);
+                D   = sqrt((lambda - rho*A + 1).^2 + 4*rho*X);
+                t_med = (rho*A - lambda - 1 + D)./(2*rho);
+                t2star = min(max(t_med, a), b);
+                g1 = a - X.*log(a) + t1star.*lambda + ((rho/2) .* (t1star-A).^2);
+                g2 =t2star - X.* log(t2star) + t2star.*lambda + ((rho/2) .* (t2star-A).^2);
+                g3 = b - X.*log(b) + t3star.*lambda + ((rho/2) .* (t3star-A).^2);
+                T(p) = t1star(p);
+                ind2better = g2(p) < g1(p) & g2(p) <= g3(p); T(ind2better) = t2star(ind2better);
+                ind3better = g3(p) < g1(p) & g3(p) < g2(p); T(ind3better) = t3star(ind3better);
+                %% For X=0
+                tmin0 = A - lambda./rho;
+                t1star0 = min(tmin0, a);
+                t3star0 = max(tmin0, b);
+                t_med0 = (rho*A - lambda - 1) ./ rho;
+                t2star0 = min(max(t_med0, a), b);
+                g10 = a + t1star0.*lambda + ((rho/2) .* (t1star0-A).^2);
+                g20 =t2star0  + t2star0.*lambda + ((rho/2) .* (t2star0-A).^2);
+                g30 = b + t3star0.*lambda + ((rho/2) .* (t3star0-A).^2);
+                T(q) = t1star0(q);
+                ind2better0 = g20(q) < g10(q) & g20(q) <= g30(q); T(ind2better0) = t2star0(ind2better0);
+                ind3better0 = g30(q) < g10(q) & g30(q) < g20(q); T(ind3better0) = t3star0(ind3better0);
+        end
+        %% Modulus with Frobenius norm
+    case 'Modulus'
+        switch error_measure
+            case 'Frobenius'
+                Y  = rho*A - lambda;
+                p  = find(Y>X);
+                q  = find(Y<(-X));
+                r1 = find(Y>(-X));
+                r2 = find(Y<X);
+                r  = intersect(r1,r2);
+                t1 = (rho*A - lambda + X )./(rho + 1);
+                t2 = (rho*A - lambda - X )./(rho + 1);
+                T(p)=t1(p);
+                T(q)=t2(q);
+                g1 = 1/2 * (X - t1).^2 + t1.*lambda + ((rho/2)*(t1 - A).^2);
+                g2 = 1/2 * (X + t2).^2 + t2.*lambda + ((rho/2)*(t2 - A).^2);
+                ind1 = find(g1(r)<g2(r)) ;
+                ind2 = find(g1(r)>=g2(r));
+                T(r(ind1)) = t1(r(ind1));
+                T(r(ind2)) = t2(r(ind2));
+                %% Modulus with L1-norm
+            case 'L1'
+                Y  =rho*A - lambda;
+                p  = find(Y>1);
+                q  = find(Y<(-1));
+                r1 = find(Y>(-1));
+                r2 = find(Y<1);
+                r  = intersect(r1,r2);
+                t11 = (rho*A - lambda +1)./(rho);
+                t22 = (rho*A - lambda -1 )./(rho);
+                t1  = max(min(t11,X), t22);
+                t2  = max(min(t11,-X), t22);
+                g1  = abs(X -t1) +  t1.*lambda + ((rho/2)*(t1 - A).^2);
+                g2  = abs(X + t2) + t2.*lambda + ((rho/2)*(t2 - A).^2);
+                T(p)=t1(p);
+                T(q)=t2(q);
+                ind1 = find(g1(r)<g2(r)) ;
+                ind2 = find(g1(r)>=g2(r));
+                T(r(ind1)) = t1(r(ind1));
+                T(r(ind2)) = t2(r(ind2));
+                %% Modulus with KL-divergence
+            case 'KL divergence'
+                p = find(X>0);
+                q = find(X==0);
+                D = sqrt((lambda - rho*A + 1).^2 + 4*rho*X);
+                T(p) =  (rho*A(p) - lambda(p) - 1 + D(p))./(2*rho) ;
+                t1 = (rho*A - lambda - 1) ./ rho;
+                t2 = (rho*A - lambda +1) ./ rho;
+                Y  = rho*A - lambda;
+                y1 = find(Y>1);
+                q1 = intersect(q,y1);
+                y2 = find(Y<-1);
+                q2 = intersect(q,y2);
+                y3 = find(Y>-1);
+                y4 = find(Y<1);
+                y5 = intersect(y3,y4);
+                q3 = intersect(q,y5);
+                T(q1) = t1(q1);
+                T(q2) = t2(q2);
+                T(q3) = 0;
+        end
+end

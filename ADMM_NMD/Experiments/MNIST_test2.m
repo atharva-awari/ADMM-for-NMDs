@@ -26,7 +26,7 @@ r =5;
 param.maxiter = inf;
 param.maxtime =5;
 param.display=0;
-param.update='random';
+param.updateWH='QR';
 % Loop over noise levels
 for i = 1:num_levels
     noise_ratio = noise_levels(i);

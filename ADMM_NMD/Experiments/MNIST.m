@@ -7,6 +7,7 @@ X=[Y.train0(w1,:);Y.train1(w1,:);Y.train2(w1,:);Y.train3(w1,:);Y.train4(w1,:);..
     Y.train5(w1,:);Y.train6(w1,:);Y.train7(w1,:);Y.train8(w1,:);Y.train9(w1,:)];
 X=double(X);
 X = X / max(X(:));
+X=1-X;
 [m,n]=size(X);
 
 % ADMM parameters
@@ -14,6 +15,7 @@ r =32;
 param.maxiter = inf;
 param.maxtime =20;
 param.display=0;
+param.updateWH='svd';
 % Noise levels to test
 noise_levels = [0.00, 0.05, 0.10, 0.15, 0.20];  % % of noise
 num_levels = length(noise_levels);
@@ -26,7 +28,8 @@ for i = 1:num_levels
     X_noisy = X;
     if noise_ratio > 0
         indices = randperm(numel(X), num_outliers);
-        X_noisy(indices) = rand(1, num_outliers);  % random noise
+       X_noisy(indices) = rand(1, num_outliers);  % random noise
+        
     end
     % Save noisy version
     X_noisy_list{i} = X_noisy;
@@ -41,6 +44,13 @@ for i = 1:num_levels
     error_measure = 'L1';
     results_L1(i) = admm_nmd(X_noisy,r,model,error_measure,param);
     X_recon_l1{i} = max(0, results_L1(i).W * results_L1(i).H);
+
+     % --- MinMax + L1 ---
+     param.a=0;
+     param.b=1;
+    error_measure = 'L1';
+    results_minmax_L1(i) = admm_nmd(X_noisy,r,model,error_measure,param);
+    X_recon_minmax_l1{i} = min(param.b,max(param.a, results_minmax_L1(i).W * results_minmax_L1(i).H));
 end
 
 %% ===== Visualization: one digit across noise levels and reconstructions =====
@@ -56,23 +66,83 @@ figure('Color','w','Name','MNIST: Noisy vs Reconstructions across noise levels')
 
 for i = 1:num_levels
     % ----- Row 1: Noisy input -----
-    subplot(3, num_levels, i);
+    subplot(4, num_levels, i);
     im_noisy = reshape(X_noisy_list{i}(row_idx, :), 28, 28)';   % transpose for natural orientation
     imagesc(im_noisy); axis image off; colormap gray;
     title(sprintf('Noise %d%%', round(100*noise_levels(i))));
-    if i == 1, ylabel('Noisy input'); end
+    if i == 1, ylabel('Noisy input', 'FontWeight','bold', 'FontSize', 12); end
 
     % ----- Row 2: ReLU + Frobenius reconstruction -----
-    subplot(3, num_levels, num_levels + i);
+    subplot(4, num_levels, num_levels + i);
     im_fro = reshape(X_recon_fro{i}(row_idx, :), 28, 28)';
     imagesc(im_fro); axis image off;
-    if i == 1, ylabel('ReLU + Frobenius'); end
+    if i == 1, ylabel('ReLU + Frobenius', 'FontWeight','bold', 'FontSize', 12); end
 
     % ----- Row 3: ReLU + L1 reconstruction -----
-    subplot(3, num_levels, 2*num_levels + i);
+    subplot(4, num_levels, 2*num_levels + i);
     im_l1 = reshape(X_recon_l1{i}(row_idx, :), 28, 28)';
     imagesc(im_l1); axis image off;
-    if i == 1, ylabel('ReLU + L1'); end
+    if i == 1, ylabel('ReLU + L1', 'FontWeight','bold', 'FontSize', 12); end
+
+     % ----- Row 4: MinMax + L1 reconstruction -----
+    subplot(4, num_levels, 3*num_levels + i);
+    im_l1 = reshape(X_recon_minmax_l1{i}(row_idx, :), 28, 28)';
+    imagesc(im_l1); axis image off;
+    if i == 1, ylabel('MinMax + L1', 'FontWeight','bold', 'FontSize', 12); end
 end
 
 sgtitle(sprintf('Digit %d (example %d) across noise levels', digit_to_show, k_within_digit));
+
+
+%% ===== Error tables (Frobenius norms vs. clean ground truth) =====
+X_clean     = X;                        % Ground truth (clean, noise-free)
+x_clean_row = X_clean(row_idx, :);      % Selected sample’s clean row
+
+% Preallocate per-sample errors (row_idx) and full-matrix errors
+err_noisy_row    = zeros(1, num_levels);
+err_fro_row      = zeros(1, num_levels);
+err_l1_row       = zeros(1, num_levels);
+err_minmax_row   = zeros(1, num_levels);
+
+err_noisy_full   = zeros(1, num_levels);
+err_fro_full     = zeros(1, num_levels);
+err_l1_full      = zeros(1, num_levels);
+err_minmax_full  = zeros(1, num_levels);
+
+for i = 1:num_levels
+    % --- Per-sample (selected digit instance) errors ---
+    err_noisy_row(i)   = norm(X_noisy_list{i}(row_idx, :)     - x_clean_row, 'fro');
+    err_fro_row(i)     = norm(X_recon_fro{i}(row_idx, :)      - x_clean_row, 'fro');
+    err_l1_row(i)      = norm(X_recon_l1{i}(row_idx, :)       - x_clean_row, 'fro');
+    err_minmax_row(i)  = norm(X_recon_minmax_l1{i}(row_idx, :)- x_clean_row, 'fro');
+
+    % --- Full-matrix errors (aggregate over all samples) ---
+    err_noisy_full(i)  = norm(X_noisy_list{i}     - X_clean, 'fro');
+    err_fro_full(i)    = norm(X_recon_fro{i}      - X_clean, 'fro');
+    err_l1_full(i)     = norm(X_recon_l1{i}       - X_clean, 'fro');
+    err_minmax_full(i) = norm(X_recon_minmax_l1{i}- X_clean, 'fro');
+end
+
+% ---------- Per-sample table ----------
+T_row = table( ...
+    round(100*noise_levels(:)), ...
+    err_noisy_row(:), ...
+    err_fro_row(:), ...
+    err_l1_row(:), ...
+    err_minmax_row(:), ...
+    'VariableNames', {'NoisePct','Noisy_vs_GT','ReLU_Fro_vs_GT','ReLU_L1_vs_GT','MinMax_L1_vs_GT'});
+
+disp('Frobenius errors for the SELECTED sample (row_idx):');
+disp(T_row);
+
+% ---------- Full-matrix table ----------
+T_full = table( ...
+    round(100*noise_levels(:)), ...
+    err_noisy_full(:), ...
+    err_fro_full(:), ...
+    err_l1_full(:), ...
+    err_minmax_full(:), ...
+    'VariableNames', {'NoisePct','Noisy_vs_GT','ReLU_Fro_vs_GT','ReLU_L1_vs_GT','MinMax_L1_vs_GT'});
+
+disp('Frobenius errors for the ENTIRE dataset (full matrices):');
+disp(T_full);

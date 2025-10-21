@@ -89,8 +89,17 @@ end
 if nargin < 5
     param = [];
 end
+if ~isfield(param,'T')
+    if strcmpi(model,'CSF')
+        param.T = sqrt(X);
+    else
+    param.T = X;
+    end
+end
 if ~isfield(param,'W0') || ~isfield(param,'H0')
-    param.W0=randn(m,r); param.H0=randn(r,n);
+    [U0,S0,V0]=svds(param.T,r);
+    param.W0=U0*sqrt(S0);
+    param.H0=sqrt(S0)*V0';
 end
 if ~isfield(param,'maxiter')
     param.maxiter = 1000;
@@ -104,11 +113,9 @@ end
 if ~isfield(param,'maxtime')
     param.maxtime = 10;
 end
-if ~isfield(param,'T')
-    param.T = randn(m,n);
-end
+
 if ~isfield(param,'lambda')
-    param.lambda = randn(m,n);
+    param.lambda = zeros(m,n);
 end
 if ~isfield(param,'a')
     param.a = eps;
@@ -125,8 +132,8 @@ end
 if ~isfield(param,'display')
     param.display = 1;
 end
-if ~isfield(param, 'update')
-    param.update='svd';
+if ~isfield(param, 'updateWH')
+    param.updateWH='svd';
 end
 cpu0=tic;
 timedisplay = 0.1; cntdisp = 0;
@@ -168,21 +175,9 @@ savetime(k)=runtime;
 % Setting initial value for penalty parameter rho
 rho(k) =1 ;
 
-%% Scaling W and H
-for i = 1:r
-    norm_w = norm(W(:, i), 2);
-    norm_h = norm(H(i, :), 2);
-    % Avoid division by zero
-    if norm_w == 0 || norm_h == 0
-        continue;
-    end
-    W(:, i) = (W(:, i) / norm_w) * norm_h;
-    H(i, :) = (H(i, :) / norm_h) * norm_w;
-end
-%% Scaling W and H according to the data X
+%% Scaling the initial factors W and H
+%[W,H] = scaling_factors(X,r,W,H);
 A = W*H;
-optscal = sum(sum(A.*X))/sum(A(:).^2);
-W = optscal*W;
 % Computing initial RMSE/Relative error
 if isfield(param, 'mask') && ~isempty(param.mask)
     [rmse_test(k),rmse_train(k)]= rmse_comp(X, A, model, param);
@@ -191,15 +186,37 @@ else
 end
 %% Running the main loop of ADMM for NMD
 while k < maxiter && runtime<maxtime
-    if strcmpi(param.update,'random')
+    if strcmpi(param.updateWH,'closed form')
         %% Updating W and H using closed form solution
         W = (1/rho(k)) * ((H*H') \ (H* lambda' + rho(k) * H * T'));
         W = W';
-        H = (1/rho(k)) * ((W'*W) \ (W' * lambda + rho(k) * W' * T)); 
-    else
+        H = (1/rho(k)) * ((W'*W) \ (W' * lambda + rho(k) * W' * T));
+    elseif strcmpi(param.updateWH,'svd')
+        %% Updating W and H using SVD
         [U,S,V] = svds(T+ (lambda./rho(k)),r);
         W = U*sqrt(S);
         H = sqrt(S)*V';
+    elseif strcmpi(param.updateWH,'gradient descent')
+        %% Updating W and H using Gradient Descent
+        Ht=H';
+        HHt=H*Ht;
+        LW=norm(HHt);
+        W=W+(1/(rho(k)*LW))*(lambda*Ht-rho(k)*(W*HHt-T*Ht));
+
+        Wt=W';
+        WtW=Wt*W;
+        LH=norm(WtW);
+        H=H+(1/(rho(k)*LH))*(Wt*lambda-rho(k)*(WtW*H-Wt*T));
+    elseif strcmpi(param.updateWH,'QR')
+        % [Qw,Rw]=qr(W,'econ');
+        % H = Qw'*(T + lambda/rho(k));
+        % [Qh,Rh]=qr(H','econ');
+        % W = (T + lambda/rho(k))*Qh;
+        % H=Qh';
+        Z = T + lambda./rho(k);
+        [Q,R] = qr(Z*H');
+        W = Q(:,1:r);
+        H = W'*Z;    
     end
     %Define A=WH for simplicity
     A = W*H;
@@ -209,7 +226,7 @@ while k < maxiter && runtime<maxtime
         [T] = update_T(B,rho(k),T,lambda,A, model, error_measure, param);
         T(M==0) = A(M==0) - (lambda(M==0)./rho(k));
     else
-        [T] = update_T(X,rho(k),T,lambda,A, model, error_measure, param);
+        [T] = update_T_new(X,rho(k),T,lambda,A, model, error_measure, param);
     end
     % Updating the Lagrange variable lambda (model independent)
     lambda = lambda + rho(k)*(T - A);
