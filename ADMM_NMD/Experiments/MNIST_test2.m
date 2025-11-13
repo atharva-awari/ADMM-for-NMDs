@@ -26,17 +26,18 @@ r =5;
 param.maxiter = inf;
 param.maxtime =5;
 param.display=0;
-param.updateWH='QR';
+param.updateWH='closed form';
 % Loop over noise levels
 for i = 1:num_levels
     noise_ratio = noise_levels(i);
     num_outliers = round(noise_ratio * numel(X));
     
-    X_noisy = X;
-    if noise_ratio > 0
-        indices = randperm(numel(X), num_outliers);
-        X_noisy(indices) = rand(1, num_outliers);  % random noise
-    end
+    % X_noisy = X;
+    % if noise_ratio > 0
+    %     indices = randperm(numel(X), num_outliers);
+    %     X_noisy(indices) = rand(1, num_outliers);  % random noise
+    % end
+    X_noisy = imnoise(X, 'salt & pepper', noise_levels(i)); 
     
     % Save noisy version
     X_noisy_list{i} = X_noisy;

@@ -7,14 +7,14 @@ error_measure = 'Frobenius'; %Choose the error measure among: 'Frobenius','L1' (
   
 %% Define parameters of the algorithm
 param.maxiter = inf;
-param.maxtime = 5;
+param.maxtime = 5;param.synthetic=true;
 
 param.a=0; param.b = 1; %If the user wants to use MinMax model, define the desired interval [a,b]
 
 %% Data
 m      = 200;
 n      = 100;
-r      = 20;  % factorization rank you want to fit
+r      = 3+0;  % factorization rank you want to fit
 r_true = 30;  % the true underlying factorization rank of the data
 X      = generate_synthetic(m,n,r_true,model,param); %Function generating a synthetic matrix X
 

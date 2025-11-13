@@ -30,12 +30,12 @@ function results = admm_nmd(X,r,model, error_measure, param)
 %                  param.mask(i,j)=0 if (i,j) is missing,
 %                  param.mask(i,j)=1 if (i,j) is observed.
 %       .validmask  = must be a subset of .mask,
-%                       and X(param.validmask) are actually known.
-%                       This allows to validate the factorization. The user
-%                       can put entries in the mask that are actually known
-%                       to validate that the model can recover them. This
-%                       is computed via the RMSE.
-%                       By default, param.validmask=param.mask
+%                     and X(param.validmask) are actually known.
+%                     This allows to validate the factorization. The user
+%                     can put entries in the mask that are actually known
+%                     to validate that the model can recover them. This
+%                     is computed via the RMSE.
+%                     By default, param.validmask=param.mask
 %       .p_obs  = percentage of observed entries in matrix completion.
 %       .B      = corrupted matrix with noise and missing entries.
 %       .display= displays plots of relative error and residual
@@ -133,7 +133,11 @@ if ~isfield(param,'display')
     param.display = 1;
 end
 if ~isfield(param, 'updateWH')
-    param.updateWH='svd';
+    param.updateWH='closed form';
+end
+% Synthetic vs real data flag (used by mc_metrics)
+if ~isfield(param,'synthetic')
+    param.synthetic = false; % set true from the caller for synthetic experiments
 end
 cpu0=tic;
 timedisplay = 0.1; cntdisp = 0;
@@ -156,11 +160,23 @@ end
 if isfield(param, 'mask') && ~isempty(param.mask)
     if param.display==1
         disp('This is a matrix completion task');
-        disp('RMSE computation for missing entries will be performed. Display of iterations and RMSE on test data:');
+        disp('RMSE computation for missing/validation entries will be performed.');
     end
-    M = param.mask;
-    B    = zeros(m,n);
-    B(M) = X(M); % Create a matrix with only observed entries of X as per the mask provided by the user.
+    M = logical(param.mask);
+
+    % Build observed matrix B from X and M (zeros where missing)
+    B = zeros(m,n);
+    B(M) = X(M);
+
+    % Decide which reference to give mc_metrics:
+    % - Synthetic: compare to full ground truth X
+    % - Real data: no ground truth -> pass [] and compare to B on observed entries
+    if isfield(param,'synthetic') && param.synthetic
+        X_true_metrics = X;
+    else
+        X_true_metrics = []; % real/incomplete data
+    end
+    B_observed = B;
 else
     if param.display==1
         disp('Full data factorization mode detected.');
@@ -180,7 +196,14 @@ rho(k) =1 ;
 A = W*H;
 % Computing initial RMSE/Relative error
 if isfield(param, 'mask') && ~isempty(param.mask)
-    [rmse_test(k),rmse_train(k)]= rmse_comp(X, A, model, param);
+    metrics = mc_metrics(X_true_metrics, B_observed, A, model, param);
+    rmse_train(k)   = metrics.rmse_train;
+    rmse_test(k)    = metrics.rmse_validation;
+    if isfield(metrics,'rmse_missing') && ~isempty(metrics.rmse_missing)
+        rmse_missing(k) = metrics.rmse_missing;
+    else
+        rmse_missing(k) = NaN;
+    end
 else
     [residual(k), objective(k)] = compute_residual_objective(X, A, T, model, error_measure, param);
 end
@@ -188,14 +211,27 @@ end
 while k < maxiter && runtime<maxtime
     if strcmpi(param.updateWH,'closed form')
         %% Updating W and H using closed form solution
-        W = (1/rho(k)) * ((H*H') \ (H* lambda' + rho(k) * H * T'));
-        W = W';
-        H = (1/rho(k)) * ((W'*W) \ (W' * lambda + rho(k) * W' * T));
+        % W = (1/rho(k)) * ((H*H') \ (H* lambda' + rho(k) * H * T'));
+        % W = W';
+        % H = (1/rho(k)) * ((W'*W) \ (W' * lambda + rho(k) * W' * T));
+        Z = T + lambda./rho(k);
+        % W = Z / H;
+        %H = W\Z;
+        % If W and H becomes rank deficient, we could try:
+        epsW = 1e-6 * norm(H,'fro')^2;
+        epsH = 1e-6 * norm(W,'fro')^2;
+        W = (Z*H') / (H*H' + epsW*eye(r));
+        H = (W'*W + epsH*eye(r)) \ (W'*Z);
     elseif strcmpi(param.updateWH,'svd')
         %% Updating W and H using SVD
-        [U,S,V] = svds(T+ (lambda./rho(k)),r);
-        W = U*sqrt(S);
-        H = sqrt(S)*V';
+        % [U,S,V] = svds(T+ (lambda./rho(k)),r);
+        % W = U*sqrt(S);
+        % H = sqrt(S)*V';
+        Z = T + lambda./rho(k);
+        for kiter = 1:10
+        W = Z / H;
+        H = W \ Z;
+        end
     elseif strcmpi(param.updateWH,'gradient descent')
         %% Updating W and H using Gradient Descent
         Ht=H';
@@ -208,22 +244,19 @@ while k < maxiter && runtime<maxtime
         LH=norm(WtW);
         H=H+(1/(rho(k)*LH))*(Wt*lambda-rho(k)*(WtW*H-Wt*T));
     elseif strcmpi(param.updateWH,'QR')
-        % [Qw,Rw]=qr(W,'econ');
-        % H = Qw'*(T + lambda/rho(k));
-        % [Qh,Rh]=qr(H','econ');
-        % W = (T + lambda/rho(k))*Qh;
-        % H=Qh';
         Z = T + lambda./rho(k);
-        [Q,R] = qr(Z*H');
-        W = Q(:,1:r);
-        H = W'*Z;    
+        % [Q,R] = qr(Z*H');
+        % W = Q(:,1:r);
+        % H = W'*Z;
+        W = Z/H;
+        H = W\Z;
     end
     %Define A=WH for simplicity
     A = W*H;
     T_prev = T;
     % Updating T, depending on the task of full factorization or matrix completion
     if isfield(param, 'mask') && ~isempty(param.mask)
-        [T] = update_T(B,rho(k),T,lambda,A, model, error_measure, param);
+        [T] = update_T_new(B,rho(k),T,lambda,A, model, error_measure, param);
         T(M==0) = A(M==0) - (lambda(M==0)./rho(k));
     else
         [T] = update_T_new(X,rho(k),T,lambda,A, model, error_measure, param);
@@ -250,12 +283,19 @@ while k < maxiter && runtime<maxtime
     compute_obj=compute_obj+toc(start_obj);
     runtime=toc(cpu0)-compute_obj;
     savetime(k)=runtime;
-    %% Calculation of RMSE (for matrix completion) or the Relative errors (for full factorization)
-    if isfield(param, 'mask') && ~isempty(param.mask)
-        [rmse_test(k),rmse_train(k)]= rmse_comp(X, A, model, param);
+   %% Calculation of RMSE (for matrix completion) or the Relative errors (for full factorization)
+if isfield(param, 'mask') && ~isempty(param.mask)
+    metrics = mc_metrics(X_true_metrics, B_observed, A, model, param);
+    rmse_train(k)   = metrics.rmse_train;
+    rmse_test(k)    = metrics.rmse_validation;
+    if isfield(metrics,'rmse_missing') && ~isempty(metrics.rmse_missing)
+        rmse_missing(k) = metrics.rmse_missing;
     else
-        [residual(k), objective(k)] = compute_residual_objective(X, A , T, model, error_measure, param);
+        rmse_missing(k) = NaN;
     end
+else
+    [residual(k), objective(k)] = compute_residual_objective(X, A , T, model, error_measure, param);
+end
     %% Displaying iteration number and errors on the command screen
     if param.display == 1
         if toc(cpu0) >= timedisplay
@@ -277,6 +317,7 @@ end
 % Making sure optional variables exist
 if ~exist('rmse_train','var'), rmse_train = []; end
 if ~exist('rmse_test','var'),  rmse_test  = []; end
+if ~exist('rmse_missing','var'),  rmse_missing  = []; end
 if ~exist('residual','var'), residual = []; end
 if ~exist('objective','var'),  objective  = []; end
 if ~exist('rho','var'),        rho        = []; end
@@ -287,10 +328,12 @@ results = struct();
 results.T           = T;
 results.W           = W;
 results.H           = H;
+results.lambda      = lambda;
 results.residual    = residual;
 results.objective   = objective;
 results.rmse_train  = rmse_train;
 results.rmse_test   = rmse_test;
+results.rmse_missing= rmse_missing;
 results.rho         = rho;
 % Keep the parameters actually used
 results.param = param;
@@ -301,9 +344,13 @@ if param.display==1
         figure('Name','RMSE Plots','NumberTitle','off');
         % --- RMSE on Test Data ---
         subplot(1,2,1);
-        plot(rmse_test, 'b-', 'LineWidth', 2); grid on;
+        if param.synthetic == true
+        plot(rmse_missing, 'b-', 'LineWidth', 2); grid on;
+        else
+          plot(rmse_test, 'b-', 'LineWidth', 2); grid on;  
+        end
         xlabel('Iterations','Interpreter','latex','FontSize',16);
-        ylabel('RMSE on Test Data','Interpreter','latex','FontSize',16);
+        ylabel('RMSE on Missing/Validation Data','Interpreter','latex','FontSize',16);
         title('Test RMSE','Interpreter','latex','FontSize',18);
         set(gca,'FontSize',14,'LineWidth',1);
         set(gca,'TickLabelInterpreter','latex');

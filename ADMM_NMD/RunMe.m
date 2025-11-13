@@ -1,15 +1,15 @@
 close all; clear all; clc;
 addpath('./utils');
-
+rng(2025);
 %% Model and Error Measure
-model         = 'CSF';      %Choose the model among: 'ReLU', 'CSF', 'MinMax', or 'Modulus'
+model         = 'MinMax';      %Choose the model among: 'ReLU', 'CSF', 'MinMax', or 'Modulus'
 error_measure = 'L1'; %Choose the error measure among: 'Frobenius','L1' (Componentwise L1 norm), or 'KL divergence'
 
 %% Define parameters of the algorithm
 param.maxiter = inf;
 param.maxtime =5;
-param.updateWH='QR';
-param.a=eps; param.b = 1;  %For the MinMax model, the user has to define the desired interval [a,b] to generate data in that interval
+param.updateWH='closed form';
+param.a=0; param.b = 1;  %For the MinMax model, the user has to define the desired interval [a,b] to generate data in that interval
 %param.display = 0;        %If the user does not want any display of the plots
 
 %% Data

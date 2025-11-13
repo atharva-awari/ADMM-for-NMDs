@@ -4,7 +4,7 @@ addpath('./utils');
 %% ===== Experiment grid =====
 models         = {'ReLU','CSF','MinMax','Modulus'};
 error_measures = {'Frobenius','L1','KL divergence'};
-update_methods = {'gradient descent','svd','QR','closed form'};
+update_methods = {'gradient descent','svd','closed form'};
 
 num_runs = 10;                     % average over 10 runs
 
@@ -80,11 +80,11 @@ for im = 1:numel(models)
         hold on;
         for iu = 1:numel(update_methods)
             y = mean_obj{iu};
-            if all(y > 0)
+            %if all(y > 0)
                semilogy(x_obj{iu}, y, 'LineWidth', 1.5);
-            else
-                plot(x_obj{iu}, y, 'LineWidth', 1.5);
-            end
+            %else
+             %   plot(x_obj{iu}, y, 'LineWidth', 1.5);
+            %end
         end
         grid on;
         xlabel('Iteration'); ylabel('Objective (mean over runs)');
@@ -96,11 +96,11 @@ for im = 1:numel(models)
         hold on;
         for iu = 1:numel(update_methods)
             y = mean_res{iu};
-           if all(y > 0)
+           %if all(y > 0)
                semilogy(x_res{iu}, y, 'LineWidth', 1.5);
-            else
-                plot(x_res{iu}, y, 'LineWidth', 1.5);
-            end
+           % else
+            %    plot(x_res{iu}, y, 'LineWidth', 1.5);
+            %end
         end
         grid on;
         xlabel('Iteration'); ylabel('Residual (mean over runs)');
