@@ -1,3 +1,4 @@
+rng(2025);
 clear all;close all; clc;
 Y=load('mnist_all.mat');
 %w1=1:10:500; %Number of images for each digit
@@ -23,12 +24,6 @@ for i = 1:num_levels
     noise_ratio = noise_levels(i);
     num_outliers = round(noise_ratio * numel(X));
 
-    % X_noisy = X;
-    % if noise_ratio > 0
-    %     indices = randperm(numel(X), num_outliers);
-    %    X_noisy(indices) = rand(1, num_outliers);  % random noise
-    % 
-    % end
     X_noisy = imnoise(X, 'salt & pepper', noise_levels(i));
     % Save noisy version
     X_noisy_list{i} = X_noisy;
@@ -50,57 +45,79 @@ for i = 1:num_levels
      % Initialize with solution of ReLU + L1
      param.a=0;
      param.b=1;
-     % param.W0=results_L1(i).W;
-     % param.H0=results_L1(i).H;
-     % param.lambda=results_L1(i).lambda;
-     % param.T = results_L1(i).T;
-
-     
-    results_minmax_L1(i) = admm_nmd(X_noisy,r,model,error_measure,param);
-    X_recon_minmax_l1{i} = min(param.b,max(param.a, results_minmax_L1(i).W * results_minmax_L1(i).H));
+     results_minmax_L1(i) = admm_nmd(X_noisy,r,model,error_measure,param);
+     X_recon_minmax_l1{i} = min(param.b,max(param.a, results_minmax_L1(i).W * results_minmax_L1(i).H));
 
    
 end
 
-%% ===== Visualization: one digit across noise levels and reconstructions =====
-% Choose which digit and which example within that digit to display
-digit_to_show = 8;        % 0..9
-k_within_digit = 5;       % 1..numel(w1), since we used w1 = 1:10
+%% ===== Visualization: One Digit Across Noise Levels and Reconstructions =====
+digit_to_show = 8;      % 0..9
+k_within_digit = 5;     % 1..numel(w1)
 
 num_per_digit = numel(w1);
 row_idx = digit_to_show * num_per_digit + k_within_digit;   % 1-based indexing
 
-% Figure layout: 3 rows (Noisy, ReLU+Frobenius, ReLU+L1) x num_levels columns
 figure('Color','w','Name','MNIST: Noisy vs Reconstructions across noise levels');
+set(gcf, 'Position', [200 200 1000 800]);  % reasonable size for export
+
+% Text styling (uniform, bold LaTeX)
+titleArgs = {'Interpreter','latex','FontSize',12,'FontWeight','bold'};
+labelArgs = {'Interpreter','latex','FontSize',12,'FontWeight','bold'};
+
+% Compact layout, but not too tight
+t = tiledlayout(4, num_levels, 'Padding','compact', 'TileSpacing','compact');
 
 for i = 1:num_levels
     % ----- Row 1: Noisy input -----
-    subplot(4, num_levels, i);
-    im_noisy = reshape(X_noisy_list{i}(row_idx, :), 28, 28)';   % transpose for natural orientation
-    imagesc(im_noisy); axis image off; colormap gray;
-    title(sprintf('Noise %d%%', round(100*noise_levels(i))));
-    if i == 1, ylabel('Noisy input', 'Interpreter', 'latex', 'FontWeight','bold', 'FontSize', 12); end
+    ax1 = nexttile(i);
+    im_noisy = reshape(X_noisy_list{i}(row_idx, :), 28, 28)';
+    imagesc(im_noisy);
+    axis image;            % keep aspect ratio
+    set(ax1,'XTick',[],'YTick',[]);
+    colormap(gray);
+    title(ax1, sprintf('\\textbf{Noise~%d\\%%}', round(100*noise_levels(i))), titleArgs{:});
+    if i == 1
+        ylabel(ax1, '\textbf{Noisy input}', labelArgs{:}, 'Rotation', 90);
+    end
 
-    % ----- Row 2: ReLU + Frobenius reconstruction -----
-    subplot(4, num_levels, num_levels + i);
+    % ----- Row 2: ReLU + Frobenius -----
+    ax2 = nexttile(num_levels + i);
     im_fro = reshape(X_recon_fro{i}(row_idx, :), 28, 28)';
-    imagesc(im_fro); axis image off; colormap gray;
-    if i == 1, ylabel('ReLU + Frobenius', 'Interpreter', 'latex', 'FontWeight','bold', 'FontSize', 12); end
+    imagesc(im_fro);
+    axis image;
+    set(ax2,'XTick',[],'YTick',[]);
+    colormap(gray);
+    if i == 1
+        ylabel(ax2, '\textbf{ReLU + Fro}', labelArgs{:}, 'Rotation', 90);
+    end
 
-    % ----- Row 3: ReLU + L1 reconstruction -----
-    subplot(4, num_levels, 2*num_levels + i);
+    % ----- Row 3: ReLU + L1 -----
+    ax3 = nexttile(2*num_levels + i);
     im_l1 = reshape(X_recon_l1{i}(row_idx, :), 28, 28)';
-    imagesc(im_l1); axis image off; colormap gray;
-    if i == 1, ylabel('ReLU + L1','Interpreter', 'latex',  'FontWeight','bold', 'FontSize', 12); end
+    imagesc(im_l1);
+    axis image;
+    set(ax3,'XTick',[],'YTick',[]);
+    colormap(gray);
+    if i == 1
+        ylabel(ax3, '\textbf{ReLU + $\ell_1$}', labelArgs{:}, 'Rotation', 90);
+    end
 
-     % ----- Row 4: MinMax + L1 reconstruction -----
-    subplot(4, num_levels, 3*num_levels + i);
+    % ----- Row 4: MinMax + L1 -----
+    ax4 = nexttile(3*num_levels + i);
     im_minmax_l1 = reshape(X_recon_minmax_l1{i}(row_idx, :), 28, 28)';
-    imagesc(im_minmax_l1); axis image off; colormap gray;
-    if i == 1, ylabel('MinMax + L1', 'FontWeight','bold', 'FontSize', 12); end
+    imagesc(im_minmax_l1);
+    axis image;
+    set(ax4,'XTick',[],'YTick',[]);
+    colormap(gray);
+    if i == 1
+        ylabel(ax4, '\textbf{MinMax + $\ell_1$}', labelArgs{:}, 'Rotation', 90);
+    end
 end
+% --- Export high-quality figure for LaTeX/Overleaf ---
+exportgraphics(gcf, 'MNIST_gradient_descent_figure.pdf', ...
+    'ContentType','image', 'BackgroundColor','white', 'Resolution',300);
 
-sgtitle(sprintf('Digit %d (example %d) across noise levels', digit_to_show, k_within_digit));
 
 
 %% ===== Error tables (Frobenius norms vs. clean ground truth) =====

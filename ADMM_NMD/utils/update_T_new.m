@@ -60,8 +60,8 @@ switch model
             case 'Frobenius'
                 for i=1:m
                     for j=1:n
-                        a =2;
-                        c =rho - 2 * X(i,j);
+                        a =4;
+                        c =rho - 4 * X(i,j);
                         d = lambda(i,j) - rho * A(i,j);
                         T(i,j) = cardanoatharva(a,c, d);
                     end
@@ -71,7 +71,7 @@ switch model
                 if rho>2
                     tmin = (rho*A - lambda)./(rho-2);
                     sqrtX=sqrt(X);
-                    t1star= min(sqrt(X), max(-sqrt(X),tmin));
+                    t1star= min(sqrtX, max(-sqrtX,tmin));
                     tmax = (rho*A - lambda)./(rho+2);
                     t2star = max(tmax,sqrtX);
                     t3star = min(tmax, -sqrtX);
@@ -86,25 +86,20 @@ switch model
                     t2 = -sqrt(X);
                     g1 = abs(X - (t1).^2) + lambda.*t1 + ((rho/2).*(t1 - A).^2);
                     g2 = abs(X - (t2).^2) + lambda.*t2 + ((rho/2).*(t2 - A).^2);
-                    l  = find(g1<g2);
-                    m  = find(g1>g2);
-                    T(l) = t1(l);
-                    T(m) = t2(m);
+                    T = t1;
+                    ind2better = g2<g1 ; T(ind2better) = t2(ind2better);
                 end
 
                 %% CSF with KL-divergence
             case 'KL divergence'
-                p  = find(X>0);
                 q  = find(X==0);
                 D  = sqrt(((lambda - rho.*A).^2) + (8*X.*(rho+2)));
                 t1 = (rho.*A - lambda + D)./(2*(rho+2));
                 t2 = (rho.*A - lambda - D)./(2*(rho+2));
                 g1 = t1.^2 - X.* log(t1.^2) + t1.*lambda + ((rho/2).*(t1-A).^2);
                 g2 = t2.^2 - X.* log(t2.^2) + t2.*lambda + ((rho/2).*(t2-A).^2);
-                ind1 = find(g1(p)<g2(p));
-                ind2 = find(g1(p)>=g2(p));
-                T(p(ind1)) = t1(p(ind1));
-                T(p(ind2)) = t2(p(ind2));
+                T = t1;
+                ind2better = g2 < g1; T(ind2better) = t2(ind2better);
                 T(q) = (rho.*A(q) - lambda(q))./(rho+2);
         end
         %% MinMax with Frobenius norm
@@ -210,23 +205,67 @@ switch model
                 T(r(ind2)) = t2(r(ind2));
                 %% Modulus with KL-divergence
             case 'KL divergence'
-                p = find(X>0);
-                q = find(X==0);
-                D = sqrt((lambda - rho*A + 1).^2 + 4*rho*X);
-                T(p) =  (rho*A(p) - lambda(p) - 1 + D(p))./(2*rho) ;
-                t1 = (rho*A - lambda - 1) ./ rho;
-                t2 = (rho*A - lambda +1) ./ rho;
-                Y  = rho*A - lambda;
-                y1 = find(Y>1);
-                q1 = intersect(q,y1);
-                y2 = find(Y<-1);
-                q2 = intersect(q,y2);
-                y3 = find(Y>-1);
-                y4 = find(Y<1);
-                y5 = intersect(y3,y4);
-                q3 = intersect(q,y5);
-                T(q1) = t1(q1);
-                T(q2) = t2(q2);
-                T(q3) = 0;
+                % p = find(X>0);
+                % q = find(X==0);
+                % 
+                % D1 = sqrt((lambda - rho.*A + 1).^2 + 4*rho*X);
+                % D2 = sqrt((lambda - rho.*A - 1).^2 + 4*rho*X);
+                % 
+                % t1 = ((rho*A - lambda - 1) + D1) ./ (2*rho);
+                % t2 = ((rho*A - lambda + 1) - D2) ./ (2*rho);
+                % 
+                % g1 = t1 - X.*log(t1) + lambda.*t1 + (rho/2).*(t1 - A).^2;
+                % g2 = -t2 - X.*log(-t2) + lambda.*t2 + (rho/2).*(t2 - A).^2;
+                % T(p) = t1(p);
+                % ind2better = g2<g1 ;
+                % ind2better = intersect(ind2better,p); T(ind2better) = t2(ind2better);
+                % 
+                % t3 = (rho.*A - lambda - 1)./rho;
+                % t3star = max(0,t3);
+                % t4 = (rho.*A - lambda + 1)./rho;
+                % t4star = min(0,t4);
+                % 
+                % g3 = t3star + lambda.*t3star + (rho/2).*(t3star - A).^2;
+                % g4 = -t4star + lambda.*t4star + (rho/2).*(t4star - A).^2;
+                % 
+                % T(q) = t3star(q);
+                % ind4better = g4 < g3;
+                % ind4better = intersect(ind4better,q);
+                % T(ind4better) = t4star(ind4better);
+
+                Y  = rho.*A - lambda;
+                p  = (X > 0);
+                
+                D1 = sqrt( max((1 - Y).^2 + 4*rho.*X, 0) );
+                t1 = (Y - 1 + D1) ./ (2*rho);
+                
+                D2 = sqrt( max((1 + Y).^2 + 4*rho.*X, 0) );
+                t2 = (1 + Y - D2) ./ (2*rho);
+                
+                f1 = t1;
+                f2 = -t2;
+                
+                g1 = f1 - X.*log( max(f1, eps) ) + t1.*lambda + 0.5*rho.*(t1 - A).^2;
+                g2 = f2 - X.*log( max(f2, eps) ) + t2.*lambda + 0.5*rho.*(t2 - A).^2;
+                
+                ind1better = (g1 <= g2);
+                T(p &  ind1better) = t1(p &  ind1better);
+                T(p & ~ind1better) = t2(p & ~ind1better);
+                
+                Y1  = (Y >= 1);
+                Ym1 = (Y <= -1);
+                mid = ~Y1 & ~Ym1;
+                
+                t1 = (Y - 1) ./ rho;
+                t2 = (Y + 1) ./ rho;
+                
+                q  = ~p; % X==0
+                T(q & Y1)  = t1(q & Y1);
+                T(q & Ym1) = t2(q & Ym1);
+                T(q & mid) = 0;
+
+
+
+
         end
 end

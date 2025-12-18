@@ -30,7 +30,7 @@ end
 if nargin < 4
     error('Usage: mc_metrics(X_true, B_observed, A, model, param)');
 end
-valid_models = {'ReLU','CSF','MinMax','Modulus'};
+valid_models = {'ReLU','CSF','MinMax','Modulus','WLRA'};
 if ~ismember(model, valid_models)
     error('Unknown model "%s". Must be one of: %s', model, strjoin(valid_models,', '));
 end
@@ -74,6 +74,8 @@ end
             Xhat = min(param.b, max(param.a, A));
         case 'Modulus'
             Xhat = abs(A);
+        case 'WLRA'
+            Xhat = A;
     end
 
     % --- RMSE helper (MATLAB-legal) ---

@@ -75,7 +75,7 @@ if strcmpi(model,'CSF')
     end
 end
 if strcmpi(model,'MinMax')
-    if min(X(:)) < param.a && max(X(:)) > param.b
+    if min(X(:)) < param.a || max(X(:)) > param.b
         warning('The input matrix contains entries which do not lie in the interval [a,b], not ideal for MinMax model.');
     end
 end
@@ -89,15 +89,15 @@ end
 if nargin < 5
     param = [];
 end
-if ~isfield(param,'T')
+if ~isfield(param,'T0')
     if strcmpi(model,'CSF')
-        param.T = sqrt(X);
+        param.T0 = sqrt(X);
     else
-    param.T = X;
+    param.T0 = X;
     end
 end
 if ~isfield(param,'W0') || ~isfield(param,'H0')
-    [U0,S0,V0]=svds(param.T,r);
+    [U0,S0,V0]=svds(param.T0,r);
     param.W0=U0*sqrt(S0);
     param.H0=sqrt(S0)*V0';
 end
@@ -111,7 +111,7 @@ if ~isfield(param,'tolerr')
     param.tolerr = 1e-10;
 end
 if ~isfield(param,'maxtime')
-    param.maxtime = 10;
+    param.maxtime = 20;
 end
 
 if ~isfield(param,'lambda')
@@ -145,7 +145,7 @@ compute_obj=0;
 %Define the initial variables
 W=param.W0;
 H=param.H0;
-T = param.T;
+T = param.T0;
 lambda = param.lambda;
 maxiter= param.maxiter;
 maxtime = param.maxtime;
@@ -153,9 +153,8 @@ maxtime = param.maxtime;
 if strcmpi(error_measure, 'KL divergence')
     f = find(X>0);
     T(f) = max(eps, T(f));
-    X(X==0)=eps;
 else
-    T=param.T;
+    T=param.T0;
 end
 if isfield(param, 'mask') && ~isempty(param.mask)
     if param.display==1
@@ -211,13 +210,8 @@ end
 while k < maxiter && runtime<maxtime
     if strcmpi(param.updateWH,'closed form')
         %% Updating W and H using closed form solution
-        % W = (1/rho(k)) * ((H*H') \ (H* lambda' + rho(k) * H * T'));
-        % W = W';
-        % H = (1/rho(k)) * ((W'*W) \ (W' * lambda + rho(k) * W' * T));
         Z = T + lambda./rho(k);
-        % W = Z / H;
-        %H = W\Z;
-        % If W and H becomes rank deficient, we could try:
+        % If W and H becomes rank deficient:
         epsW = 1e-6 * norm(H,'fro')^2;
         epsH = 1e-6 * norm(W,'fro')^2;
         W = (Z*H') / (H*H' + epsW*eye(r));
@@ -268,7 +262,7 @@ while k < maxiter && runtime<maxtime
     t_incr = 2;
     t_decr = 2;
     p_residual = norm(T - A, 'fro');
-    S = rho(k)*W'*(T - T_prev);
+    S = rho(k)*(T - T_prev);
     d_residual = norm(S, 'fro');
     if p_residual > mu*d_residual
         rho(k+1) = t_incr*rho(k);
@@ -335,6 +329,7 @@ results.rmse_train  = rmse_train;
 results.rmse_test   = rmse_test;
 results.rmse_missing= rmse_missing;
 results.rho         = rho;
+results.time       = savetime;
 % Keep the parameters actually used
 results.param = param;
 
