@@ -14,7 +14,6 @@ r =32;
 param.maxiter = inf;
 param.maxtime =30;
 param.display=0;
-param.updateWH='closed form';
 % Noise levels to test
 noise_levels = [0.00, 0.05, 0.10, 0.15, 0.20];  % % of noise
 num_levels = length(noise_levels);

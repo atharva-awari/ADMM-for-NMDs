@@ -13,7 +13,6 @@ loss_fields  = {'Frobenius','L1','KL'};
 
 param.maxiter   = 1000;
 param.maxtime   = 20;
-param.updateWH  = 'closed form';
 param.a         = eps;
 param.b         = 1;
 param.display   = 0;

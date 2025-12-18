@@ -93,7 +93,7 @@ if ~isfield(param,'T0')
     if strcmpi(model,'CSF')
         param.T0 = sqrt(X);
     else
-    param.T0 = X;
+        param.T0 = X;
     end
 end
 if ~isfield(param,'W0') || ~isfield(param,'H0')
@@ -132,9 +132,7 @@ end
 if ~isfield(param,'display')
     param.display = 1;
 end
-if ~isfield(param, 'updateWH')
-    param.updateWH='closed form';
-end
+
 % Synthetic vs real data flag (used by mc_metrics)
 if ~isfield(param,'synthetic')
     param.synthetic = false; % set true from the caller for synthetic experiments
@@ -208,43 +206,15 @@ else
 end
 %% Running the main loop of ADMM for NMD
 while k < maxiter && runtime<maxtime
-    if strcmpi(param.updateWH,'closed form')
-        %% Updating W and H using closed form solution
-        Z = T + lambda./rho(k);
-        % If W and H becomes rank deficient:
-        epsW = 1e-6 * norm(H,'fro')^2;
-        epsH = 1e-6 * norm(W,'fro')^2;
-        W = (Z*H') / (H*H' + epsW*eye(r));
-        H = (W'*W + epsH*eye(r)) \ (W'*Z);
-    elseif strcmpi(param.updateWH,'svd')
-        %% Updating W and H using SVD
-        % [U,S,V] = svds(T+ (lambda./rho(k)),r);
-        % W = U*sqrt(S);
-        % H = sqrt(S)*V';
-        Z = T + lambda./rho(k);
-        for kiter = 1:10
-        W = Z / H;
-        H = W \ Z;
-        end
-    elseif strcmpi(param.updateWH,'gradient descent')
-        %% Updating W and H using Gradient Descent
-        Ht=H';
-        HHt=H*Ht;
-        LW=norm(HHt);
-        W=W+(1/(rho(k)*LW))*(lambda*Ht-rho(k)*(W*HHt-T*Ht));
 
-        Wt=W';
-        WtW=Wt*W;
-        LH=norm(WtW);
-        H=H+(1/(rho(k)*LH))*(Wt*lambda-rho(k)*(WtW*H-Wt*T));
-    elseif strcmpi(param.updateWH,'QR')
-        Z = T + lambda./rho(k);
-        % [Q,R] = qr(Z*H');
-        % W = Q(:,1:r);
-        % H = W'*Z;
-        W = Z/H;
-        H = W\Z;
-    end
+    %% Updating W and H using closed form solution
+    Z = T + lambda./rho(k);
+    % If W and H becomes rank deficient:
+    epsW = 1e-6 * norm(H,'fro')^2;
+    epsH = 1e-6 * norm(W,'fro')^2;
+    W = (Z*H') / (H*H' + epsW*eye(r));
+    H = (W'*W + epsH*eye(r)) \ (W'*Z);
+
     %Define A=WH for simplicity
     A = W*H;
     T_prev = T;
@@ -277,19 +247,19 @@ while k < maxiter && runtime<maxtime
     compute_obj=compute_obj+toc(start_obj);
     runtime=toc(cpu0)-compute_obj;
     savetime(k)=runtime;
-   %% Calculation of RMSE (for matrix completion) or the Relative errors (for full factorization)
-if isfield(param, 'mask') && ~isempty(param.mask)
-    metrics = mc_metrics(X_true_metrics, B_observed, A, model, param);
-    rmse_train(k)   = metrics.rmse_train;
-    rmse_test(k)    = metrics.rmse_validation;
-    if isfield(metrics,'rmse_missing') && ~isempty(metrics.rmse_missing)
-        rmse_missing(k) = metrics.rmse_missing;
+    %% Calculation of RMSE (for matrix completion) or the Relative errors (for full factorization)
+    if isfield(param, 'mask') && ~isempty(param.mask)
+        metrics = mc_metrics(X_true_metrics, B_observed, A, model, param);
+        rmse_train(k)   = metrics.rmse_train;
+        rmse_test(k)    = metrics.rmse_validation;
+        if isfield(metrics,'rmse_missing') && ~isempty(metrics.rmse_missing)
+            rmse_missing(k) = metrics.rmse_missing;
+        else
+            rmse_missing(k) = NaN;
+        end
     else
-        rmse_missing(k) = NaN;
+        [residual(k), objective(k)] = compute_residual_objective(X, A , T, model, error_measure, param);
     end
-else
-    [residual(k), objective(k)] = compute_residual_objective(X, A , T, model, error_measure, param);
-end
     %% Displaying iteration number and errors on the command screen
     if param.display == 1
         if toc(cpu0) >= timedisplay
@@ -340,9 +310,9 @@ if param.display==1
         % --- RMSE on Test Data ---
         subplot(1,2,1);
         if param.synthetic == true
-        plot(rmse_missing, 'b-', 'LineWidth', 2); grid on;
+            plot(rmse_missing, 'b-', 'LineWidth', 2); grid on;
         else
-          plot(rmse_test, 'b-', 'LineWidth', 2); grid on;  
+            plot(rmse_test, 'b-', 'LineWidth', 2); grid on;
         end
         xlabel('Iterations','Interpreter','latex','FontSize',16);
         ylabel('RMSE on Missing/Validation Data','Interpreter','latex','FontSize',16);
