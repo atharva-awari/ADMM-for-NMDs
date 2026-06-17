@@ -1,66 +1,86 @@
-close all; clear all; clc;
-addpath('./utils');
-rng(2025);
+clear all; clc;
+load MITatharva.mat
 
-load CBCL.mat
+noise_level=1;
+X_noisy = poissrnd(X*noise_level)/noise_level;
+X_noisy(X_noisy==0)=eps;
 
+%% ADMM parameters MinMax+KL
+model = 'MinMax';
+error_measure = 'KL divergence';
+param.maxiter = 3000;
+param.maxtime = 10;
 [m,n] = size(X);
-r = 10;
-
-W0 = randn(m,r);
-H0 = randn(r,n);
-param.maxit=150;
-[W,H,W_stop,H_stop,err,iter,savetime] = alternatescheme(X,W0,H0,param);
-
-model = 'ReLU';
-error_measure = 'Frobenius';
-Z = max(0,W0*H0); 
-optscal = sum(sum(Z.*X))/sum(Z(:).^2); 
-W0 = optscal*W0;
-param.W0=W0;
-param.H0=H0;
-param.maxiter=15;
+r = 4;
+param.a=0.5;
+param.b=1;
 param.display = 0;
+results_minmax_kl = admm_nmd(X_noisy,r,model,error_measure,param);
+X_recon_minmax_kl = min(param.b,max(param.a,results_minmax_kl.W*results_minmax_kl.H));
 
-results = admm_nmd(X, r, model, error_measure, param);
+%% ADMM parameters MinMax+Fro
+model = 'MinMax';
+error_measure = 'Frobenius';
+param.maxiter = 3000;
+param.maxtime = 10;
+param.a=0.5;
+param.b=1;
+results_minmax_fro = admm_nmd(X_noisy,r,model,error_measure,param);
+X_recon_minmax_fro = min(param.b,max(param.a,results_minmax_fro.W*results_minmax_fro.H));
 
-%% --- Side-by-side plots: Error vs Iteration and Error vs Time ---
-figure('Color','w');
+%% ADMM parameters MinMax+L1
+model = 'MinMax';
+error_measure = 'L1';
+param.maxiter = 3000;
+param.maxtime = 10;
+param.a=0.5;
+param.b=1;
+results_minmax_l1 = admm_nmd(X_noisy,r,model,error_measure,param);
+X_recon_minmax_l1 = min(param.b,max(param.a,results_minmax_l1.W*results_minmax_l1.H));
 
-% -------------------------
-% Left: Error vs Iteration
-% -------------------------
-subplot(1,2,1); hold on; grid on; box on;
 
-p1 = semilogy(err, 'LineWidth', 2);
-p2 = semilogy(results.objective, 'LineWidth', 2);
+%% ADMM parameters ReLU+KL
+model = 'ReLU';
+error_measure = 'KL divergence';
+param.maxiter = 3000;
+param.maxtime = 10;
+results_relu_kl = admm_nmd(X_noisy,r,model,error_measure,param);
+X_recon_relu_kl = max(0,results_relu_kl.W*results_relu_kl.H);
 
-xlabel('Iteration','Interpreter','latex','FontSize',14);
-ylabel('Relative error','Interpreter','latex','FontSize',14);
-title('Error vs Iteration','Interpreter','latex','FontSize',16);
+%% Reconstruction
+figure;
+subplot(3,2,1);
+imshow(1-X);
+title('Clean image');
 
-legend([p1 p2], ...
-    {'$\mathrm{Coordinate descent}$', '$\mathrm{ADMM}$'}, ...
-    'Interpreter','latex','FontSize',13,'Location','northeast');
+subplot(3,2,2);
+imshow(1-X_noisy);
+title('Noisy Image');
 
-set(gca,'FontSize',12,'LineWidth',1);
+subplot(3,2,3);
+imshow(1-X_recon_minmax_kl);
+title('Low-rank recon MinMax+KL');
 
-% --------------------
-% Right: Error vs Time
-% --------------------
-subplot(1,2,2); hold on; grid on; box on;
+subplot(3,2,4);
+imshow(1-X_recon_minmax_fro);
+title('Low-rank recon MinMax+Fro');
 
-p3 = semilogy(savetime, err, 'LineWidth', 2);
-p4 = semilogy(results.time, results.objective, 'LineWidth', 2);
+subplot(3,2,5);
+imshow(1-X_recon_minmax_l1);
+title('Low-rank recon MinMax+L1');
 
-xlabel('Time (s)','Interpreter','latex','FontSize',14);
-ylabel('Relative error','Interpreter','latex','FontSize',14);
-title('Error vs Time','Interpreter','latex','FontSize',16);
+subplot(3,2,6);
+imshow(1-X_recon_relu_kl);
+title('Low-rank recon ReLU+KL');
 
-legend([p3 p4], ...
-    {'$\mathrm{Coordinate descent}$', '$\mathrm{ADMM}$'}, ...
-    'Interpreter','latex','FontSize',13,'Location','northeast');
 
-set(gca,'FontSize',12,'LineWidth',1);
 
+%% Relative errors
+fprintf('Relative error wrt ground truth - MinMax + KL = %f \n', norm(X - X_recon_minmax_kl,'fro') / norm(X,'fro'));
+
+fprintf('Relative error wrt ground truth - MinMax + Fro =  %f\n',  norm(X - X_recon_minmax_fro, 'fro' ) / norm(X,'fro'));
+
+fprintf('Relative error wrt ground truth - MinMax + L1 = %f \n', norm(X - X_recon_minmax_l1,'fro') / norm(X,'fro'));
+
+fprintf('Relative error wrt ground truth - ReLU+ KL  =  %f\n',  norm(X - X_recon_relu_kl, 'fro' ) / norm(X,'fro'));
 
